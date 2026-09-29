@@ -1,0 +1,68 @@
+x-app-env: &app-env
+  APP_NAME: "Prototipo Logística"
+  APP_ENV: production
+  APP_DEBUG: "false"
+  APP_URL: "http://localhost:8000"
+  # Toma APP_KEY del .env del proyecto si existe; si no, el entrypoint genera una
+  APP_KEY: ${APP_KEY:-}
+  DB_CONNECTION: pgsql
+  DB_HOST: db
+  DB_PORT: 5432
+  DB_DATABASE: ${DB_DATABASE:-prototipo_logistica}
+  DB_USERNAME: ${DB_USERNAME:-postgres}
+  DB_PASSWORD: ${DB_PASSWORD:-postgres}
+  QUEUE_CONNECTION: database
+  CACHE_STORE: database
+  SESSION_DRIVER: database
+  MAIL_MAILER: log
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: prototipo-logistica:latest
+    container_name: prototipo-logistica
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment: *app-env
+    volumes:
+      - app-storage:/app/storage
+    depends_on:
+      db:
+        condition: service_healthy
+
+  worker:
+    image: prototipo-logistica:latest
+    container_name: prototipo-logistica-worker
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint: ["/app/docker/worker-entrypoint.sh"]
+    environment: *app-env
+    volumes:
+      - app-storage:/app/storage
+
+  db:
+    image: postgres:18-alpine
+    container_name: prototipo-logistica-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-prototipo_logistica}
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+    ports:
+      - "5435:5432"
+    volumes:
+      - app-pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-prototipo} -d ${DB_DATABASE:-prototipo_logistica}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  app-storage:
+  app-pgdata:
