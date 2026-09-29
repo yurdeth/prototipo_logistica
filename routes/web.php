@@ -4,7 +4,10 @@ use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'Welcome')->name('home');
 
-Route::middleware(['auth', 'verified'])->group(function () {
+// Verificación de email deshabilitada: cualquier visita a estas URLs va al dashboard
+Route::redirect('email/verify/{any?}', '/dashboard')->where('any', '.*');
+
+Route::middleware(['auth'])->group(function () {
     Route::inertia('dashboard', 'Dashboard')->name('dashboard');
 });
 

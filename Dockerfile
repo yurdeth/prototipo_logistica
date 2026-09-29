@@ -22,7 +22,9 @@ FROM php:8.4-cli-alpine AS frontend
 
 # nodejs>=22: mínimo para Vite; hoy resuelve Node 24 en Alpine 3.24,
 # y acepta majors futuros en vez de romper el build al actualizar la base
-RUN apk add --no-cache "nodejs>=22" npm
+RUN apk add --no-cache "nodejs>=22" npm \
+    # vite.config.ts invoca "php8.4" (binario del host de desarrollo); alias local
+    && ln -sf "$(command -v php)" /usr/local/bin/php8.4
 
 WORKDIR /app
 COPY --from=vendor /app/vendor /app/vendor

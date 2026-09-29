@@ -29,6 +29,7 @@ export default defineConfig({
         }),
         wayfinder({
             formVariants: true,
+            command: 'php8.4 artisan wayfinder:generate',
         }),
     ]),
     server: {

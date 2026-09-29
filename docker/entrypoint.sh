@@ -26,6 +26,12 @@ if [ -z "${APP_KEY}" ]; then
 fi
 
 php artisan migrate --force
+
+# Claves OAuth de Passport: el volumen de storage puede venir vacío
+if [ ! -f storage/oauth-private.key ]; then
+    php artisan passport:keys --no-interaction
+fi
+
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
