@@ -16,10 +16,10 @@ class AdminUserSeeder extends Seeder
         $this->call(RoleSeeder::class);
 
         $admin = User::firstOrCreate(
-            ['email' => env('ADMIN_EMAIL', 'admin@example.com')],
+            ['email' => config('admin.email')],
             [
                 'name' => 'Admin',
-                'password' => env('ADMIN_PASSWORD', 'password'),
+                'password' => config('admin.password'),
             ],
         );
 

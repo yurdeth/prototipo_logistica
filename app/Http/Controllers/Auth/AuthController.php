@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use Laravel\Passport\AccessToken;
 
 class AuthController extends Controller
 {
@@ -43,7 +44,11 @@ class AuthController extends Controller
 
     public function logout(Request $request): JsonResponse
     {
-        $request->user('api')->token()->revoke();
+        $token = $request->user('api')?->token();
+
+        if ($token instanceof AccessToken) {
+            $token->revoke();
+        }
 
         return response()->json(['message' => 'Logged out']);
     }
