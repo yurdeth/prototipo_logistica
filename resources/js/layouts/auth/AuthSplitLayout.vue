@@ -29,10 +29,7 @@ defineProps<{
                     class="flex h-9 w-9 items-center justify-center rounded-lg"
                     :style="{ backgroundColor: colors.naranjaClaro }"
                 >
-                    <Truck
-                        class="h-5 w-5 text-white"
-                        aria-hidden="true"
-                    />
+                    <Truck class="h-5 w-5 text-white" aria-hidden="true" />
                 </span>
 
                 {{ name }}
@@ -46,9 +43,7 @@ defineProps<{
                     {{ landingContent.badge }}
                 </span>
 
-                <h2
-                    class="mt-4 text-2xl font-medium leading-tight md:text-3xl"
-                >
+                <h2 class="mt-4 text-2xl leading-tight font-medium md:text-3xl">
                     {{ landingContent.title }}
                 </h2>
 
@@ -86,10 +81,7 @@ defineProps<{
                         class="flex h-9 w-9 items-center justify-center rounded-lg"
                         :style="{ backgroundColor: colors.naranjaClaro }"
                     >
-                        <Truck
-                            class="h-5 w-5 text-white"
-                            aria-hidden="true"
-                        />
+                        <Truck class="h-5 w-5 text-white" aria-hidden="true" />
                     </span>
 
                     <span class="text-sm font-medium text-foreground">
@@ -108,10 +100,7 @@ defineProps<{
                         {{ title }}
                     </h1>
 
-                    <p
-                        class="text-sm text-muted-foreground"
-                        v-if="description"
-                    >
+                    <p class="text-sm text-muted-foreground" v-if="description">
                         {{ description }}
                     </p>
                 </div>

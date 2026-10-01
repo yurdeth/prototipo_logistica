@@ -1,10 +1,6 @@
 import type { Component } from 'vue';
 
-import {
-    MapPin,
-    Route,
-    BarChart3,
-} from '@/UI/Icons';
+import { MapPin, Route, BarChart3 } from '@/UI/Icons';
 
 interface Feature {
     title: string;
@@ -30,19 +26,16 @@ export const landingContent = {
 
     secondaryButton: 'Conocer la solución',
 
-    featuresTitle:
-        'Todo lo que necesitas para entender tu operación',
+    featuresTitle: 'Todo lo que necesitas para entender tu operación',
 
     featuresDescription:
         'Una visión integrada de tus rutas, envíos, vehículos, costos y principales indicadores de desempeño.',
 
-    contactTitle:
-        'Una operación más visible. Decisiones más claras.',
+    contactTitle: 'Una operación más visible. Decisiones más claras.',
 
     contactDescription:
         'Explora los datos de tu operación logística desde diferentes perspectivas y encuentra información que te ayude a comprender su comportamiento.',
 };
-
 
 export const features: Feature[] = [
     {
@@ -86,6 +79,5 @@ export const stats: Stat[] = [
         label: 'indicadores de negocio',
     },
 ];
-
 
 export const bars = [45, 58, 52, 70, 64, 82, 94];

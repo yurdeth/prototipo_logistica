@@ -8,7 +8,7 @@ import { colors } from '@/UI/Colors';
 // Importamos los iconos desde nuestro archivo centralizado
 import { Truck, Menu, X } from '@/UI/Icons';
 // Contenido de la landing
-import { landingContent, features, stats, bars} from '@/config/landing';
+import { landingContent, features, stats, bars } from '@/config/landing';
 
 // Controla el menú desplegable en móvil
 const menuOpen = ref(false);
@@ -18,18 +18,19 @@ const menuOpen = ref(false);
     <Head title="Sistema de Gestión Operacional y Analítica Logística" />
 
     <!-- Contenedor principal -->
-    <div class="min-h-screen bg-white" :style="{ color: colors.azulOscuro }" >
+    <div class="min-h-screen bg-white" :style="{ color: colors.azulOscuro }">
         <!-- NAVEGACIÓN -->
         <header class="border-b border-slate-200 bg-white">
-            <nav class="mx-auto flex max-w-6xl items-center justify-between px-4 py-3" >
+            <nav
+                class="mx-auto flex max-w-6xl items-center justify-between px-4 py-3"
+            >
                 <!-- Logo -->
                 <Link href="/" class="flex items-center gap-2">
-                    <span class="flex h-7 w-7 items-center justify-center rounded-lg"
-                        :style="{ backgroundColor: colors.naranjaClaro }" >
-                        <Truck
-                            class="h-4 w-4 text-white"
-                            aria-hidden="true"
-                        />
+                    <span
+                        class="flex h-7 w-7 items-center justify-center rounded-lg"
+                        :style="{ backgroundColor: colors.naranjaClaro }"
+                    >
+                        <Truck class="h-4 w-4 text-white" aria-hidden="true" />
                     </span>
 
                     <span class="text-base font-medium">
@@ -39,15 +40,21 @@ const menuOpen = ref(false);
 
                 <!-- Enlaces escritorio -->
                 <div class="hidden items-center gap-6 text-sm md:flex">
-                    <a href="#objetivo" class="text-slate-600 hover:opacity-70" >
+                    <a href="#objetivo" class="text-slate-600 hover:opacity-70">
                         Proyecto
                     </a>
 
-                    <a href="#arquitectura" class="text-slate-600 hover:opacity-70" >
+                    <a
+                        href="#arquitectura"
+                        class="text-slate-600 hover:opacity-70"
+                    >
                         Arquitectura
                     </a>
 
-                    <a href="#analitica" class="text-slate-600 hover:opacity-70" >
+                    <a
+                        href="#analitica"
+                        class="text-slate-600 hover:opacity-70"
+                    >
                         Analítica
                     </a>
 
@@ -78,31 +85,24 @@ const menuOpen = ref(false);
                     aria-label="Abrir menú"
                     @click="menuOpen = !menuOpen"
                 >
-                    <X
-                        v-if="menuOpen"
-                        class="h-6 w-6"
-                    />
+                    <X v-if="menuOpen" class="h-6 w-6" />
 
-                    <Menu
-                        v-else
-                        class="h-6 w-6"
-                    />
+                    <Menu v-else class="h-6 w-6" />
                 </button>
             </nav>
 
             <!-- Menú móvil -->
-            <div v-if="menuOpen" class="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 text-sm md:hidden" >
-                <a href="#objetivo" @click="menuOpen = false" >
-                    Proyecto
-                </a>
+            <div
+                v-if="menuOpen"
+                class="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 text-sm md:hidden"
+            >
+                <a href="#objetivo" @click="menuOpen = false"> Proyecto </a>
 
                 <a href="#arquitectura" @click="menuOpen = false">
                     Arquitectura
                 </a>
 
-                <a href="#analitica" @click="menuOpen = false" >
-                    Analítica
-                </a>
+                <a href="#analitica" @click="menuOpen = false"> Analítica </a>
 
                 <Link
                     v-if="$page.props.auth.user"
@@ -125,9 +125,7 @@ const menuOpen = ref(false);
         </header>
 
         <main>
-            <section
-                :style="{ backgroundColor: colors.azulOscuro }"
-            >
+            <section :style="{ backgroundColor: colors.azulOscuro }">
                 <div
                     class="mx-auto grid max-w-6xl items-center gap-10 px-4 py-12 md:grid-cols-2 md:py-20"
                 >
@@ -143,7 +141,7 @@ const menuOpen = ref(false);
                         </span>
 
                         <h1
-                            class="mt-4 text-3xl font-medium leading-tight text-white md:text-5xl"
+                            class="mt-4 text-3xl leading-tight font-medium text-white md:text-5xl"
                         >
                             {{ landingContent.title }}
                         </h1>
@@ -159,8 +157,7 @@ const menuOpen = ref(false);
                                 href="#analitica"
                                 class="rounded-lg px-6 py-3 text-center text-sm font-medium text-white hover:opacity-90"
                                 :style="{
-                                    backgroundColor:
-                                        colors.naranjaClaro,
+                                    backgroundColor: colors.naranjaClaro,
                                 }"
                             >
                                 {{ landingContent.primaryButton }}
@@ -176,16 +173,10 @@ const menuOpen = ref(false);
                     </div>
 
                     <!-- Tarjeta visual -->
-                    <div
-                        class="rounded-xl bg-white p-4 shadow-xl md:p-6"
-                    >
-                        <div
-                            class="mb-5 flex items-center justify-between"
-                        >
+                    <div class="rounded-xl bg-white p-4 shadow-xl md:p-6">
+                        <div class="mb-5 flex items-center justify-between">
                             <div>
-                                <span
-                                    class="text-xs text-slate-500"
-                                >
+                                <span class="text-xs text-slate-500">
                                     Indicadores de operación
                                 </span>
 
@@ -232,9 +223,7 @@ const menuOpen = ref(false);
                                     Rutas
                                 </span>
 
-                                <p
-                                    class="text-sm font-medium text-slate-800"
-                                >
+                                <p class="text-sm font-medium text-slate-800">
                                     Analizadas
                                 </p>
                             </div>
@@ -244,9 +233,7 @@ const menuOpen = ref(false);
                                     Costos
                                 </span>
 
-                                <p
-                                    class="text-sm font-medium text-slate-800"
-                                >
+                                <p class="text-sm font-medium text-slate-800">
                                     Operativos
                                 </p>
                             </div>
@@ -256,9 +243,7 @@ const menuOpen = ref(false);
                                     Tiempo
                                 </span>
 
-                                <p
-                                    class="text-sm font-medium text-slate-800"
-                                >
+                                <p class="text-sm font-medium text-slate-800">
                                     Distribución
                                 </p>
                             </div>
@@ -286,9 +271,7 @@ const menuOpen = ref(false);
                             {{ stat.value }}
                         </div>
 
-                        <div
-                            class="text-xs text-slate-600 md:text-sm"
-                        >
+                        <div class="text-xs text-slate-600 md:text-sm">
                             {{ stat.label }}
                         </div>
                     </div>
@@ -302,7 +285,7 @@ const menuOpen = ref(false);
             >
                 <div class="max-w-3xl">
                     <span
-                        class="text-xs font-medium uppercase tracking-wider"
+                        class="text-xs font-medium tracking-wider uppercase"
                         :style="{
                             color: colors.naranjaClaro,
                         }"
@@ -310,40 +293,38 @@ const menuOpen = ref(false);
                         Propósito del proyecto
                     </span>
 
-                    <h2
-                        class="mt-2 text-2xl font-medium md:text-3xl"
-                    >
-                        Gestión operacional orientada al análisis
-                        y optimización
+                    <h2 class="mt-2 text-2xl font-medium md:text-3xl">
+                        Gestión operacional orientada al análisis y optimización
                     </h2>
 
-                    <p class="mt-4 text-sm leading-relaxed text-slate-600 md:text-base" >
-                        Centraliza la información de tu operación logística y obtén una
-                        visión clara del comportamiento de tus envíos, rutas y recursos.
-                        Consulta los datos que necesitas para entender cómo se mueve tu
-                        operación y detectar situaciones que requieren atención.
+                    <p
+                        class="mt-4 text-sm leading-relaxed text-slate-600 md:text-base"
+                    >
+                        Centraliza la información de tu operación logística y
+                        obtén una visión clara del comportamiento de tus envíos,
+                        rutas y recursos. Consulta los datos que necesitas para
+                        entender cómo se mueve tu operación y detectar
+                        situaciones que requieren atención.
                     </p>
 
-                    <p class="mt-4 text-sm leading-relaxed text-slate-600 md:text-base" >
-                        Convierte los datos operacionales en información útil mediante
-                        indicadores, análisis históricos y visualizaciones que permiten
-                        explorar tiempos de distribución, costos, consumo de combustible,
+                    <p
+                        class="mt-4 text-sm leading-relaxed text-slate-600 md:text-base"
+                    >
+                        Convierte los datos operacionales en información útil
+                        mediante indicadores, análisis históricos y
+                        visualizaciones que permiten explorar tiempos de
+                        distribución, costos, consumo de combustible,
                         utilización de vehículos y desempeño de las rutas.
                     </p>
                 </div>
             </section>
 
             <!-- ARQUITECTURA -->
-            <section
-                id="arquitectura"
-                class="bg-slate-50"
-            >
-                <div
-                    class="mx-auto max-w-6xl px-4 py-12 md:py-16"
-                >
+            <section id="arquitectura" class="bg-slate-50">
+                <div class="mx-auto max-w-6xl px-4 py-12 md:py-16">
                     <div class="max-w-3xl">
                         <span
-                            class="text-xs font-medium uppercase tracking-wider"
+                            class="text-xs font-medium tracking-wider uppercase"
                             :style="{
                                 color: colors.naranjaClaro,
                             }"
@@ -351,19 +332,17 @@ const menuOpen = ref(false);
                             Arquitectura de datos
                         </span>
 
-                        <h2
-                            class="mt-2 text-2xl font-medium md:text-3xl"
-                        >
+                        <h2 class="mt-2 text-2xl font-medium md:text-3xl">
                             Del dato operacional al análisis
                         </h2>
 
                         <p
                             class="mt-4 text-sm leading-relaxed text-slate-600 md:text-base"
                         >
-                            La arquitectura desacoplada permite cubrir
-                            el ciclo de vida de los datos, desde su
-                            recopilación y registro hasta su transformación,
-                            almacenamiento y análisis.
+                            La arquitectura desacoplada permite cubrir el ciclo
+                            de vida de los datos, desde su recopilación y
+                            registro hasta su transformación, almacenamiento y
+                            análisis.
                         </p>
                     </div>
 
@@ -375,8 +354,7 @@ const menuOpen = ref(false);
                             <div
                                 class="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white"
                                 :style="{
-                                    backgroundColor:
-                                        colors.azulClaro,
+                                    backgroundColor: colors.azulClaro,
                                 }"
                             >
                                 DB
@@ -391,8 +369,8 @@ const menuOpen = ref(false);
                             >
                                 Base de datos operacional para gestionar
                                 entidades y eventos logísticos, junto con
-                                información geográfica relacionada con
-                                puntos y rutas de distribución.
+                                información geográfica relacionada con puntos y
+                                rutas de distribución.
                             </p>
                         </article>
 
@@ -403,24 +381,20 @@ const menuOpen = ref(false);
                             <div
                                 class="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white"
                                 :style="{
-                                    backgroundColor:
-                                        colors.naranjaClaro,
+                                    backgroundColor: colors.naranjaClaro,
                                 }"
                             >
                                 G
                             </div>
 
-                            <h3 class="mt-4 text-base font-medium">
-                                Neo4j
-                            </h3>
+                            <h3 class="mt-4 text-base font-medium">Neo4j</h3>
 
                             <p
                                 class="mt-2 text-sm leading-relaxed text-slate-600"
                             >
                                 Representación de la red de distribución
-                                mediante nodos y conexiones para evaluar
-                                caminos mínimos y posibles rutas
-                                alternativas.
+                                mediante nodos y conexiones para evaluar caminos
+                                mínimos y posibles rutas alternativas.
                             </p>
                         </article>
 
@@ -431,8 +405,7 @@ const menuOpen = ref(false);
                             <div
                                 class="flex h-10 w-10 items-center justify-center rounded-lg text-sm font-bold text-white"
                                 :style="{
-                                    backgroundColor:
-                                        colors.azulOscuro,
+                                    backgroundColor: colors.azulOscuro,
                                 }"
                             >
                                 BI
@@ -445,90 +418,52 @@ const menuOpen = ref(false);
                             <p
                                 class="mt-2 text-sm leading-relaxed text-slate-600"
                             >
-                                Consolidación y visualización de
-                                indicadores para analizar clientes,
-                                rutas, vehículos, tiempos y costos.
+                                Consolidación y visualización de indicadores
+                                para analizar clientes, rutas, vehículos,
+                                tiempos y costos.
                             </p>
                         </article>
                     </div>
 
                     <!-- Flujo de datos -->
-                    <div
-                        class="mt-8 rounded-xl bg-white p-5 shadow-sm"
-                    >
+                    <div class="mt-8 rounded-xl bg-white p-5 shadow-sm">
                         <div
                             class="flex flex-col items-center justify-between gap-4 text-center md:flex-row"
                         >
                             <div class="flex-1">
-                                <span
-                                    class="text-xs text-slate-500"
-                                >
-                                    01
-                                </span>
+                                <span class="text-xs text-slate-500"> 01 </span>
 
-                                <p
-                                    class="mt-1 text-sm font-medium"
-                                >
+                                <p class="mt-1 text-sm font-medium">
                                     Datos operacionales
                                 </p>
                             </div>
 
-                            <div
-                                class="hidden text-slate-300 md:block"
-                            >
-                                →
-                            </div>
+                            <div class="hidden text-slate-300 md:block">→</div>
 
                             <div class="flex-1">
-                                <span
-                                    class="text-xs text-slate-500"
-                                >
-                                    02
-                                </span>
+                                <span class="text-xs text-slate-500"> 02 </span>
 
-                                <p
-                                    class="mt-1 text-sm font-medium"
-                                >
+                                <p class="mt-1 text-sm font-medium">
                                     Integración y transformación
                                 </p>
                             </div>
 
-                            <div
-                                class="hidden text-slate-300 md:block"
-                            >
-                                →
-                            </div>
+                            <div class="hidden text-slate-300 md:block">→</div>
 
                             <div class="flex-1">
-                                <span
-                                    class="text-xs text-slate-500"
-                                >
-                                    03
-                                </span>
+                                <span class="text-xs text-slate-500"> 03 </span>
 
-                                <p
-                                    class="mt-1 text-sm font-medium"
-                                >
+                                <p class="mt-1 text-sm font-medium">
                                     Procesamiento
                                 </p>
                             </div>
 
-                            <div
-                                class="hidden text-slate-300 md:block"
-                            >
-                                →
-                            </div>
+                            <div class="hidden text-slate-300 md:block">→</div>
 
                             <div class="flex-1">
-                                <span
-                                    class="text-xs text-slate-500"
-                                >
-                                    04
-                                </span>
+                                <span class="text-xs text-slate-500"> 04 </span>
 
-                                <p
-                                    class="mt-1 text-sm font-medium"
-                                >
+                                <p class="mt-1 text-sm font-medium">
                                     Indicadores BI
                                 </p>
                             </div>
@@ -544,7 +479,7 @@ const menuOpen = ref(false);
             >
                 <div class="max-w-3xl">
                     <span
-                        class="text-xs font-medium uppercase tracking-wider"
+                        class="text-xs font-medium tracking-wider uppercase"
                         :style="{
                             color: colors.naranjaClaro,
                         }"
@@ -552,9 +487,7 @@ const menuOpen = ref(false);
                         Inteligencia de Negocios
                     </span>
 
-                    <h2
-                        class="mt-2 text-2xl font-medium md:text-3xl"
-                    >
+                    <h2 class="mt-2 text-2xl font-medium md:text-3xl">
                         {{ landingContent.featuresTitle }}
                     </h2>
 
@@ -580,15 +513,11 @@ const menuOpen = ref(false);
                         />
 
                         <div>
-                            <h3
-                                class="text-sm font-medium md:text-base"
-                            >
+                            <h3 class="text-sm font-medium md:text-base">
                                 {{ feature.title }}
                             </h3>
 
-                            <p
-                                class="mt-1 text-sm text-slate-600"
-                            >
+                            <p class="mt-1 text-sm text-slate-600">
                                 {{ feature.description }}
                             </p>
                         </div>
@@ -596,82 +525,56 @@ const menuOpen = ref(false);
                 </div>
 
                 <!-- Indicadores -->
-                <div
-                    class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
-                >
-                    <div
-                        class="rounded-xl border border-slate-200 p-4"
-                    >
-                        <span class="text-xs text-slate-500">
-                            Clientes
-                        </span>
+                <div class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <div class="rounded-xl border border-slate-200 p-4">
+                        <span class="text-xs text-slate-500"> Clientes </span>
 
                         <p class="mt-1 text-sm font-medium">
                             Cantidad de envíos
                         </p>
 
-                        <p
-                            class="mt-2 text-xs leading-relaxed text-slate-500"
-                        >
-                            Identificación de clientes con mayor volumen
-                            de envíos.
+                        <p class="mt-2 text-xs leading-relaxed text-slate-500">
+                            Identificación de clientes con mayor volumen de
+                            envíos.
                         </p>
                     </div>
 
-                    <div
-                        class="rounded-xl border border-slate-200 p-4"
-                    >
-                        <span class="text-xs text-slate-500">
-                            Rutas
-                        </span>
+                    <div class="rounded-xl border border-slate-200 p-4">
+                        <span class="text-xs text-slate-500"> Rutas </span>
 
                         <p class="mt-1 text-sm font-medium">
                             Tiempos y retrasos
                         </p>
 
-                        <p
-                            class="mt-2 text-xs leading-relaxed text-slate-500"
-                        >
-                            Análisis de rutas con mayores tiempos
-                            de distribución.
+                        <p class="mt-2 text-xs leading-relaxed text-slate-500">
+                            Análisis de rutas con mayores tiempos de
+                            distribución.
                         </p>
                     </div>
 
-                    <div
-                        class="rounded-xl border border-slate-200 p-4"
-                    >
-                        <span class="text-xs text-slate-500">
-                            Costos
-                        </span>
+                    <div class="rounded-xl border border-slate-200 p-4">
+                        <span class="text-xs text-slate-500"> Costos </span>
 
                         <p class="mt-1 text-sm font-medium">
                             Operación y combustible
                         </p>
 
-                        <p
-                            class="mt-2 text-xs leading-relaxed text-slate-500"
-                        >
-                            Evolución de costos operativos y consumo
-                            de combustible.
+                        <p class="mt-2 text-xs leading-relaxed text-slate-500">
+                            Evolución de costos operativos y consumo de
+                            combustible.
                         </p>
                     </div>
 
-                    <div
-                        class="rounded-xl border border-slate-200 p-4"
-                    >
-                        <span class="text-xs text-slate-500">
-                            Vehículos
-                        </span>
+                    <div class="rounded-xl border border-slate-200 p-4">
+                        <span class="text-xs text-slate-500"> Vehículos </span>
 
                         <p class="mt-1 text-sm font-medium">
                             Nivel de utilización
                         </p>
 
-                        <p
-                            class="mt-2 text-xs leading-relaxed text-slate-500"
-                        >
-                            Análisis de utilización de los diferentes
-                            tipos de vehículos.
+                        <p class="mt-2 text-xs leading-relaxed text-slate-500">
+                            Análisis de utilización de los diferentes tipos de
+                            vehículos.
                         </p>
                     </div>
                 </div>
@@ -684,7 +587,7 @@ const menuOpen = ref(false);
                 >
                     <div>
                         <span
-                            class="text-xs font-medium uppercase tracking-wider"
+                            class="text-xs font-medium tracking-wider uppercase"
                             :style="{
                                 color: colors.naranjaClaro,
                             }"
@@ -692,27 +595,25 @@ const menuOpen = ref(false);
                             Panel de control
                         </span>
 
-                        <h2
-                            class="mt-2 text-2xl font-medium md:text-3xl"
-                        >
+                        <h2 class="mt-2 text-2xl font-medium md:text-3xl">
                             Una vista integrada de la operación
                         </h2>
 
                         <p
                             class="mt-4 text-sm leading-relaxed text-slate-600 md:text-base"
                         >
-                            Los resultados del procesamiento y análisis
-                            se presentan mediante un panel de control
-                            interactivo que concentra los principales
-                            indicadores de la operación logística.
+                            Los resultados del procesamiento y análisis se
+                            presentan mediante un panel de control interactivo
+                            que concentra los principales indicadores de la
+                            operación logística.
                         </p>
 
                         <p
                             class="mt-4 text-sm leading-relaxed text-slate-600 md:text-base"
                         >
-                            La información puede consultarse desde
-                            diferentes perspectivas para analizar rutas,
-                            vehículos, clientes, tiempos y costos.
+                            La información puede consultarse desde diferentes
+                            perspectivas para analizar rutas, vehículos,
+                            clientes, tiempos y costos.
                         </p>
                     </div>
 
@@ -721,66 +622,42 @@ const menuOpen = ref(false);
                         class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
                     >
                         <div class="grid grid-cols-2 gap-4">
-                            <div
-                                class="rounded-lg bg-slate-50 p-4"
-                            >
-                                <span
-                                    class="text-xs text-slate-500"
-                                >
+                            <div class="rounded-lg bg-slate-50 p-4">
+                                <span class="text-xs text-slate-500">
                                     Tiempo
                                 </span>
 
-                                <p
-                                    class="mt-1 text-sm font-medium"
-                                >
+                                <p class="mt-1 text-sm font-medium">
                                     Distribución
                                 </p>
                             </div>
 
-                            <div
-                                class="rounded-lg bg-slate-50 p-4"
-                            >
-                                <span
-                                    class="text-xs text-slate-500"
-                                >
+                            <div class="rounded-lg bg-slate-50 p-4">
+                                <span class="text-xs text-slate-500">
                                     Costos
                                 </span>
 
-                                <p
-                                    class="mt-1 text-sm font-medium"
-                                >
+                                <p class="mt-1 text-sm font-medium">
                                     Operativos
                                 </p>
                             </div>
 
-                            <div
-                                class="rounded-lg bg-slate-50 p-4"
-                            >
-                                <span
-                                    class="text-xs text-slate-500"
-                                >
+                            <div class="rounded-lg bg-slate-50 p-4">
+                                <span class="text-xs text-slate-500">
                                     Rutas
                                 </span>
 
-                                <p
-                                    class="mt-1 text-sm font-medium"
-                                >
+                                <p class="mt-1 text-sm font-medium">
                                     Desempeño
                                 </p>
                             </div>
 
-                            <div
-                                class="rounded-lg bg-slate-50 p-4"
-                            >
-                                <span
-                                    class="text-xs text-slate-500"
-                                >
+                            <div class="rounded-lg bg-slate-50 p-4">
+                                <span class="text-xs text-slate-500">
                                     Vehículos
                                 </span>
 
-                                <p
-                                    class="mt-1 text-sm font-medium"
-                                >
+                                <p class="mt-1 text-sm font-medium">
                                     Utilización
                                 </p>
                             </div>
@@ -789,13 +666,10 @@ const menuOpen = ref(false);
                         <div
                             class="mt-4 rounded-lg p-4 text-white"
                             :style="{
-                                backgroundColor:
-                                    colors.azulOscuro,
+                                backgroundColor: colors.azulOscuro,
                             }"
                         >
-                            <span
-                                class="text-xs text-slate-300"
-                            >
+                            <span class="text-xs text-slate-300">
                                 Flujo de información
                             </span>
 
@@ -806,22 +680,27 @@ const menuOpen = ref(false);
                     </div>
                 </div>
             </section>
- 
-            <section
-                id="contacto"
-                class="mx-auto max-w-6xl px-4 py-12"
-            >
-                <div class="rounded-xl px-4 py-8 text-center md:px-8 md:py-10" :style="{ backgroundColor: colors.azulClaro }" >
-                    <h2 class="text-lg font-medium text-white md:text-2xl" >
+
+            <section id="contacto" class="mx-auto max-w-6xl px-4 py-12">
+                <div
+                    class="rounded-xl px-4 py-8 text-center md:px-8 md:py-10"
+                    :style="{ backgroundColor: colors.azulClaro }"
+                >
+                    <h2 class="text-lg font-medium text-white md:text-2xl">
                         {{ landingContent.contactTitle }}
                     </h2>
 
-                    <p class="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-blue-100" >
+                    <p
+                        class="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-blue-100"
+                    >
                         {{ landingContent.contactDescription }}
                     </p>
 
-                    <Link :href="login()" class="mt-5 inline-block rounded-lg bg-white px-6 py-2.5 text-sm font-medium hover:bg-slate-100"
-                        :style="{ color: colors.azulClaro }" >
+                    <Link
+                        :href="login()"
+                        class="mt-5 inline-block rounded-lg bg-white px-6 py-2.5 text-sm font-medium hover:bg-slate-100"
+                        :style="{ color: colors.azulClaro }"
+                    >
                         Acceder al sistema
                     </Link>
                 </div>
@@ -829,10 +708,12 @@ const menuOpen = ref(false);
         </main>
 
         <!-- FOOTER -->
-        <footer class="py-4 text-center text-xs text-slate-300" :style="{ backgroundColor: colors.azulOscuro }" >
-            © {{ new Date().getFullYear() }} Prototipo Logistica
-            · Sistema de Gestión Operacional y Analítica 
+        <footer
+            class="py-4 text-center text-xs text-slate-300"
+            :style="{ backgroundColor: colors.azulOscuro }"
+        >
+            © {{ new Date().getFullYear() }} Prototipo Logistica · Sistema de
+            Gestión Operacional y Analítica
         </footer>
     </div>
 </template>
-

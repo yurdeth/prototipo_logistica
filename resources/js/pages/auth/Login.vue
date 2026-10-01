@@ -14,7 +14,8 @@ import { request } from '@/routes/password';
 defineOptions({
     layout: {
         title: 'Inicia sesión en tu cuenta',
-        description: 'Ingresa tu correo electrónico y contraseña para continuar',
+        description:
+            'Ingresa tu correo electrónico y contraseña para continuar',
     },
 });
 

@@ -1,1 +1,14 @@
-composer ci:check
+if composer ci:check; then
+  exit 0
+fi
+
+echo ""
+echo "El push fue bloqueado: composer ci:check falló."
+echo ""
+echo "Arreglos rápidos según el error:"
+echo "  - formato/lint de JS y Vue: npm run check:fix"
+echo "  - formato de PHP:           composer lint"
+echo "  - detalle completo:         composer ci:check"
+echo ""
+echo "Luego vuelve a hacer push."
+exit 1
