@@ -2,7 +2,7 @@
 import { Link, usePage } from '@inertiajs/vue3';
 import { colors } from '@/UI/Colors';
 import { Truck } from '@/UI/Icons';
-import { landingContent } from '@/config/landing';
+import { loginContent } from '@/config/infoLogin';
 import { home } from '@/routes';
 
 const page = usePage();
@@ -126,17 +126,17 @@ const barras = [35, 55, 40, 70, 50, 85, 65, 100];
                         :style="{ backgroundColor: colors.naranjaClaro }"
                     />
 
-                    {{ landingContent.badge }}
+                    {{ loginContent.badge }}
                 </span>
 
                 <h2
                     class="mt-5 text-2xl leading-tight font-bold tracking-tight md:text-3xl"
                 >
-                    {{ landingContent.title }}
+                    {{ loginContent.title }}
                 </h2>
 
                 <p class="mt-4 text-sm leading-relaxed text-slate-300">
-                    {{ landingContent.description }}
+                    {{ loginContent.description }}
                 </p>
             </div>
 
