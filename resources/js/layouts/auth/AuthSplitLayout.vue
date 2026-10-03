@@ -13,332 +13,441 @@ defineProps<{
     description?: string;
 }>();
 
-// Barras del motivo decorativo inferior
-const barras = [35, 55, 40, 70, 50, 85, 65, 100];
+// Anchos (px) de las barras del código de barras decorativo
+const barcode: number[] = [
+    2, 4, 1, 3, 1, 5, 2, 1, 4, 2, 1, 3, 5, 1, 2, 4, 1, 3, 2, 4, 1, 5, 2, 1,
+];
+
+// Número de guía del documento (decorativo, cambia cada día)
+const numeroGuia = `SV-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}`;
 </script>
 
 <template>
     <div class="grid min-h-svh lg:grid-cols-2">
-        <!-- Panel de marca -->
+        <!-- ====================================================== -->
+        <!-- PANEL IZQUIERDO -->
         <div
             class="relative hidden flex-col justify-between overflow-hidden p-10 text-white lg:flex"
             :style="{ backgroundColor: colors.azulOscuro }"
         >
-            <!-- Fondo: red logística -->
-            <img
-                src="/img/hero-network.png"
-                alt=""
-                aria-hidden="true"
-                class="absolute inset-0 h-full w-full object-cover opacity-35"
-            />
-
+            <!-- Decoración -->
             <div
-                class="absolute inset-0"
-                :style="{
-                    background: `linear-gradient(200deg, transparent 30%, ${colors.azulOscuro}cc 75%, ${colors.azulOscuro} 100%)`,
-                }"
+                class="pointer-events-none absolute -bottom-40 -left-40 h-96 w-96 rounded-full border opacity-5"
+                :style="{ borderColor: colors.naranjaClaro }"
             />
 
-            <!-- Red animada -->
-            <svg
-                class="pointer-events-none absolute inset-0 h-full w-full opacity-60"
-                viewBox="0 0 800 900"
-                preserveAspectRatio="xMidYMid slice"
-                aria-hidden="true"
-            >
-                <path
-                    v-for="ruta in [
-                        'M 520 640 C 610 560, 660 520, 730 420',
-                        'M 640 700 C 700 640, 730 580, 780 500',
-                        'M 560 780 C 660 740, 720 680, 770 600',
-                    ]"
-                    :key="ruta"
-                    :d="ruta"
-                    fill="none"
-                    stroke="rgba(37, 99, 235, 0.45)"
-                    stroke-width="1.5"
-                    stroke-dasharray="8 12"
-                    class="ruta-flujo"
-                />
-
-                <path
-                    d="M 470 850 C 600 800, 690 720, 780 560"
-                    fill="none"
-                    :stroke="`${colors.naranjaClaro}99`"
-                    stroke-width="2"
-                    stroke-dasharray="10 12"
-                    class="ruta-flujo ruta-lenta"
-                />
-
-                <circle r="4" :fill="colors.naranjaClaro" class="sombra-brillo">
-                    <animateMotion
-                        dur="8s"
-                        repeatCount="indefinite"
-                        path="M 470 850 C 600 800, 690 720, 780 560"
-                    />
-                </circle>
-
-                <circle
-                    v-for="nodo in [
-                        { x: 520, y: 640, naranja: false },
-                        { x: 730, y: 420, naranja: true },
-                        { x: 640, y: 700, naranja: false },
-                        { x: 780, y: 500, naranja: true },
-                        { x: 470, y: 850, naranja: false },
-                    ]"
-                    :key="`${nodo.x}-${nodo.y}`"
-                    :cx="nodo.x"
-                    :cy="nodo.y"
-                    :r="nodo.naranja ? 6 : 4.5"
-                    :fill="nodo.naranja ? colors.naranjaClaro : '#2563EB'"
-                    class="sombra-brillo nodo-pulso"
-                />
-            </svg>
-
+            <!-- LOGO -->
             <Link
                 :href="home()"
-                class="animar-aparicion relative z-10 flex items-center gap-2.5 text-base font-semibold tracking-tight"
+                class="relative z-10 flex items-center gap-2 text-base font-medium"
             >
                 <span
-                    class="flex h-9 w-9 items-center justify-center rounded-lg shadow-lg"
+                    class="flex h-9 w-9 items-center justify-center rounded-lg"
                     :style="{ backgroundColor: colors.naranjaClaro }"
                 >
                     <Truck class="h-5 w-5 text-white" aria-hidden="true" />
                 </span>
-
                 {{ name }}
             </Link>
 
-            <div
-                class="animar-aparicion relative z-10 max-w-md"
-                style="animation-delay: 0.15s"
-            >
-                <span
-                    class="inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-xs font-medium"
-                    :style="{
-                        borderColor: `${colors.naranjaClaro}66`,
-                        color: '#fdba74',
-                        backgroundColor: `${colors.naranjaClaro}14`,
-                    }"
-                >
+            <!-- CONTENIDO CENTRAL -->
+            <div class="relative z-10 flex flex-col">
+                <!-- Mensaje principal -->
+                <div class="max-w-md">
                     <span
-                        class="h-1.5 w-1.5 animate-pulse rounded-full"
-                        :style="{ backgroundColor: colors.naranjaClaro }"
-                    />
+                        class="inline-block rounded-full border px-3 py-1 text-xs font-medium text-orange-300"
+                        :style="{ borderColor: colors.naranjaClaro }"
+                    >
+                        {{ loginContent.badge }}
+                    </span>
 
-                    {{ loginContent.badge }}
-                </span>
+                    <h2
+                        class="mt-4 text-2xl leading-tight font-semibold md:text-3xl"
+                    >
+                        {{ loginContent.title }}
+                    </h2>
 
-                <h2
-                    class="mt-5 text-2xl leading-tight font-bold tracking-tight md:text-3xl"
+                    <p class="mt-3 text-sm leading-relaxed text-slate-300">
+                        {{ loginContent.description }}
+                    </p>
+                </div>
+
+                <!-- CARD DE ANALÍTICA                                  -->
+                <div
+                    class="mt-5 rounded-xl border border-white/20 bg-white/5 p-4 backdrop-blur-sm"
+                    aria-hidden="true"
                 >
-                    {{ loginContent.title }}
-                </h2>
+                    <!-- Título -->
+                    <div class="flex items-center justify-between">
+                        <span
+                            class="font-mono text-[11px] font-medium tracking-wider"
+                            :style="{ color: colors.grisClaro }"
+                        >
+                            {{ loginContent.insightTitle }}
+                        </span>
 
-                <p class="mt-4 text-sm leading-relaxed text-slate-300">
-                    {{ loginContent.description }}
-                </p>
+                        <span
+                            class="rounded-full border px-2 py-0.5 text-[9px] tracking-wider uppercase"
+                            :style="{
+                                borderColor: `${colors.naranjaClaro}60`,
+                                color: colors.naranjaClaro,
+                            }"
+                        >
+                            BI
+                        </span>
+                    </div>
+
+                    <!-- VISUALIZACIÓN DE RUTAS -->
+                    <svg viewBox="0 0 320 110" class="mt-2 block w-full">
+                        <!-- Ruta 1 -->
+                        <path
+                            d="M22 88 C 50 40, 85 36, 108 52"
+                            fill="none"
+                            :stroke="colors.azulClaro"
+                            stroke-width="1.5"
+                            stroke-dasharray="4 4"
+                        />
+
+                        <!-- Ruta 2 -->
+                        <path
+                            d="M108 52 C 135 100, 175 100, 200 76"
+                            fill="none"
+                            :stroke="colors.azulClaro"
+                            stroke-width="1.5"
+                            stroke-dasharray="4 4"
+                        />
+
+                        <!-- Ruta principal -->
+                        <path
+                            d="M200 76 C 228 28, 258 20, 296 28"
+                            fill="none"
+                            :stroke="colors.naranjaClaro"
+                            stroke-width="2"
+                        />
+
+                        <!-- Ruta secundaria -->
+                        <path
+                            d="M108 52 C 145 14, 190 10, 232 16"
+                            fill="none"
+                            :stroke="colors.azulClaro"
+                            stroke-width="1"
+                            stroke-dasharray="2 5"
+                            opacity="0.5"
+                        />
+
+                        <!-- Puntos -->
+                        <circle
+                            cx="22"
+                            cy="88"
+                            r="4.5"
+                            :fill="colors.azulClaro"
+                        />
+
+                        <circle
+                            cx="108"
+                            cy="52"
+                            r="4.5"
+                            :fill="colors.azulClaro"
+                        />
+
+                        <circle
+                            cx="200"
+                            cy="76"
+                            r="4.5"
+                            :fill="colors.azulClaro"
+                        />
+
+                        <circle
+                            cx="232"
+                            cy="16"
+                            r="3"
+                            :fill="colors.grisMedio"
+                        />
+
+                        <!-- Destino -->
+                        <circle
+                            cx="296"
+                            cy="28"
+                            r="6"
+                            :fill="colors.naranjaClaro"
+                        />
+
+                        <circle
+                            cx="296"
+                            cy="28"
+                            r="11"
+                            fill="none"
+                            :stroke="colors.naranjaClaro"
+                            stroke-opacity="0.4"
+                            class="motion-safe:animate-pulse"
+                        />
+
+                        <!-- Etiquetas -->
+                        <g
+                            font-size="9"
+                            :fill="colors.grisClaro"
+                            font-family="ui-monospace, monospace"
+                        >
+                            <text x="10" y="105">A</text>
+                            <text x="97" y="42">B</text>
+                            <text x="188" y="94">C</text>
+                            <text x="280" y="50">D</text>
+                            <text x="230" y="10">E</text>
+                        </g>
+                    </svg>
+
+                    <!-- MÉTRICAS-->
+                    <div class="mt-3 grid grid-cols-3 gap-2">
+                        <div
+                            v-for="metric in loginContent.metrics"
+                            :key="metric.value"
+                            class="rounded-lg border border-white/5 bg-white/5 px-3 py-2.5"
+                        >
+                            <p class="text-xs font-semibold text-white">
+                                {{ metric.value }}
+                            </p>
+
+                            <p
+                                class="mt-1 text-[9px] leading-tight text-slate-300"
+                            >
+                                {{ metric.label }}
+                            </p>
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            <!-- Motivo decorativo de barras -->
-            <div
-                class="animar-aparicion relative z-10 flex h-16 items-end gap-1.5"
-                style="animation-delay: 0.3s"
-                aria-hidden="true"
-            >
-                <div
-                    v-for="(height, i) in barras"
-                    :key="i"
-                    class="barra-crecer w-6 rounded-t"
-                    :style="{
-                        height: `${height}%`,
-                        backgroundColor:
-                            i === barras.length - 1
-                                ? colors.naranjaClaro
-                                : colors.azulClaro,
-                        animationDelay: `${0.4 + i * 0.08}s`,
-                    }"
-                />
+            <!-- FOOTER                                             -->
+            <div class="relative z-10">
+                <p class="text-[10px] text-slate-400">
+                    Analítica · Indicadores · Inteligencia de Negocios
+                </p>
             </div>
         </div>
 
-        <!-- Panel del formulario -->
-        <div
-            class="relative flex flex-col items-center justify-center gap-6 overflow-hidden bg-background p-6 md:p-10"
+        <!-- PANEL DERECHO / LOGIN  -->
+
+        <main
+            class="flex items-center justify-center px-4 py-10 lg:bg-slate-100 lg:px-10"
+            :style="{
+                backgroundImage: `linear-gradient(${colors.azulOscuro}08 1px, transparent 1px), linear-gradient(90deg, ${colors.azulOscuro}08 1px, transparent 1px)`,
+                backgroundSize: '32px 32px',
+            }"
         >
-            <!-- Costura que integra ambos paneles (azul → naranja) -->
             <div
-                class="absolute inset-y-0 left-0 z-10 hidden w-px lg:block"
+                class="waybill relative w-full max-w-sm rounded-md p-5 font-mono shadow-xl"
                 :style="{
-                    backgroundImage: `linear-gradient(180deg, ${colors.azulClaro}, ${colors.naranjaClaro})`,
+                    backgroundColor: colors.papel,
+                    color: colors.azulOscuro,
                 }"
-                aria-hidden="true"
-            />
-
-            <!-- Brillo azul que se asoma desde el panel de marca -->
-            <div
-                class="absolute -top-32 -left-32 h-[28rem] w-[28rem] rounded-full"
-                :style="{
-                    backgroundColor: `${colors.azulClaro}33`,
-                    filter: 'blur(96px)',
-                }"
-                aria-hidden="true"
-            />
-
-            <div
-                class="absolute -bottom-32 -left-32 h-96 w-96 rounded-full"
-                :style="{
-                    backgroundColor: `${colors.naranjaClaro}1f`,
-                    filter: 'blur(96px)',
-                }"
-                aria-hidden="true"
-            />
-
-            <!-- Ruta decorativa discreta en la esquina inferior -->
-            <svg
-                class="pointer-events-none absolute -right-6 -bottom-6 h-48 w-48 opacity-[0.07]"
-                viewBox="0 0 200 200"
-                aria-hidden="true"
             >
-                <path
-                    d="M -10 160 C 40 120, 80 140, 120 90 S 180 40, 220 60"
-                    fill="none"
-                    :stroke="colors.azulOscuro"
-                    stroke-width="6"
-                    stroke-linecap="round"
-                    stroke-dasharray="1 18"
-                />
-            </svg>
+                <!-- ENCABEZADO -->
+                <div
+                    class="flex items-center justify-between border-b-2 border-dashed pb-3"
+                    :style="{ borderColor: colors.grisMedio }"
+                >
+                    <Link :href="home()" class="flex items-center gap-1.5">
+                        <Truck
+                            class="h-5 w-5"
+                            :style="{ color: colors.naranjaClaro }"
+                            aria-hidden="true"
+                        />
 
-            <div class="animar-suave relative z-10 w-full max-w-sm">
-                <!-- Logo en pantallas pequeñas -->
-                <div class="mb-8 flex flex-col items-center gap-2 lg:hidden">
+                        <span class="text-sm font-bold tracking-wide uppercase">
+                            {{ name }}
+                        </span>
+                    </Link>
+
                     <span
-                        class="flex h-9 w-9 items-center justify-center rounded-lg shadow-md"
-                        :style="{ backgroundColor: colors.naranjaClaro }"
+                        class="text-[9px] tracking-wider"
+                        :style="{ color: colors.grisMedio }"
                     >
-                        <Truck class="h-5 w-5 text-white" aria-hidden="true" />
-                    </span>
-
-                    <span class="text-sm font-medium text-foreground">
-                        {{ name }}
+                        N.º GUÍA {{ numeroGuia }}
                     </span>
                 </div>
 
+                <!-- RUTA: mismos nodos A → E del panel de analítica -->
                 <div
-                    class="flex flex-col space-y-2 text-center"
-                    v-if="title || description"
+                    class="mt-3 flex items-center gap-2 text-[10px]"
+                    :style="{ color: colors.grisPizarra }"
+                    aria-hidden="true"
                 >
+                    <span
+                        class="rounded-full px-1.5 py-0.5 text-[9px] font-bold"
+                        :style="{
+                            border: `1px solid ${colors.azulOscuro}`,
+                            color: colors.azulOscuro,
+                        }"
+                    >
+                        A
+                    </span>
+
+                    <span
+                        class="text-[10px] font-bold"
+                        :style="{ color: colors.azulOscuro }"
+                    >
+                        TU EMPRESA
+                    </span>
+
+                    <span
+                        class="h-px flex-1"
+                        :style="{
+                            backgroundImage: `repeating-linear-gradient(90deg, ${colors.grisMedio} 0 4px, transparent 4px 8px)`,
+                        }"
+                    />
+
+                    <span
+                        class="rounded-full px-1.5 py-0.5 text-[9px] font-bold"
+                        :style="{
+                            border: `1px solid ${colors.naranjaClaro}`,
+                            color: colors.naranjaClaro,
+                        }"
+                    >
+                        E
+                    </span>
+
+                    <span
+                        class="text-[10px] font-bold"
+                        :style="{ color: colors.azulOscuro }"
+                    >
+                        PANEL
+                    </span>
+                </div>
+
+                <!-- TÍTULO Y DESCRIPCIÓN -->
+                <div v-if="title || description" class="mt-5 space-y-1">
                     <h1
-                        class="text-xl font-semibold tracking-tight text-foreground"
                         v-if="title"
+                        class="text-lg font-bold tracking-tight uppercase"
                     >
                         {{ title }}
                     </h1>
 
-                    <p class="text-sm text-muted-foreground" v-if="description">
+                    <p
+                        v-if="description"
+                        class="text-xs"
+                        :style="{ color: colors.grisPizarra }"
+                    >
                         {{ description }}
                     </p>
                 </div>
 
-                <div class="mt-6">
+                <!-- FORMULARIO -->
+                <div class="mt-5">
                     <slot />
                 </div>
+
+                <!-- CÓDIGO DE BARRAS + SELLO -->
+                <div
+                    class="mt-6 flex items-end justify-between opacity-80"
+                    aria-hidden="true"
+                >
+                    <div>
+                        <div class="flex h-6 items-stretch gap-0.5">
+                            <span
+                                v-for="(width, i) in barcode"
+                                :key="i"
+                                :style="{
+                                    width: `${width}px`,
+                                    backgroundColor: colors.azulOscuro,
+                                }"
+                            />
+                        </div>
+
+                        <p
+                            class="mt-1 text-[8px] tracking-[0.2em]"
+                            :style="{ color: colors.grisMedio }"
+                        >
+                            {{ numeroGuia }}
+                        </p>
+                    </div>
+
+                    <span
+                        class="-rotate-6 rounded-sm border px-1.5 py-0.5 text-[9px] font-bold tracking-widest opacity-90"
+                        :style="{
+                            borderColor: colors.naranjaClaro,
+                            color: colors.naranjaClaro,
+                        }"
+                    >
+                        ACCESO SEGURO
+                    </span>
+                </div>
+
+                <!-- Micro-perforación de desgarre del documento -->
+                <div
+                    class="tipo-perforacion mt-4"
+                    :style="{ color: colors.grisMedio }"
+                    aria-hidden="true"
+                />
             </div>
-        </div>
+        </main>
     </div>
 </template>
 
 <style scoped>
-.animar-aparicion {
-    animation: aparecer 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+.waybill :deep(label) {
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: v-bind('colors.grisPizarra');
 }
 
-@keyframes aparecer {
-    from {
-        opacity: 0;
-        transform: translateY(24px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+.waybill :deep(input:not([type='checkbox'])) {
+    border-radius: 0;
+    border-width: 0 0 1.5px 0;
+    border-color: v-bind('colors.azulOscuro');
+    background-color: transparent;
+    box-shadow: none;
+    padding-left: 0;
+    font-family: ui-monospace, monospace;
 }
 
-/* Entrada más sutil para el formulario (también en móvil) */
-.animar-suave {
-    animation: aparecer-suave 0.5s ease-out both;
-    animation-delay: 0.1s;
+/* Focus claramente visible: la línea de escritura se ilumina en azul */
+.waybill :deep(input:not([type='checkbox']):focus-visible) {
+    border-color: v-bind('colors.azulClaro');
+    box-shadow: 0 3px 0 -1px v-bind('colors.azulClaro');
+    outline: none;
 }
 
-@keyframes aparecer-suave {
-    from {
-        opacity: 0;
-        transform: translateY(12px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+/* Links del documento: subrayado punteado, como los datos de una guía */
+.waybill :deep(a) {
+    text-decoration: underline dotted;
+    text-underline-offset: 3px;
+    transition: color 0.2s ease;
 }
 
-.barra-crecer {
-    animation: crecer 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
-    transform-origin: bottom;
+.waybill :deep(a:hover) {
+    color: v-bind('colors.azulClaro');
 }
 
-@keyframes crecer {
-    from {
-        transform: scaleY(0);
-    }
-
-    to {
-        transform: scaleY(1);
-    }
+/* El botón-sello se hunde al presionarlo, como un tampón sobre el papel */
+.waybill :deep(button[type='submit']) {
+    border-radius: 4px;
+    background-color: v-bind('colors.azulOscuro');
+    color: #fff;
+    font-family: ui-monospace, monospace;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    transition: transform 0.15s ease;
 }
 
-.ruta-flujo {
-    animation: fluir 2.5s linear infinite;
+.waybill :deep(button[type='submit']:active) {
+    transform: translateY(2px);
 }
 
-.ruta-lenta {
-    animation-duration: 4s;
-}
-
-@keyframes fluir {
-    to {
-        stroke-dashoffset: -20;
-    }
-}
-
-.nodo-pulso {
-    animation: latir 3s ease-in-out infinite;
-}
-
-@keyframes latir {
-    0%,
-    100% {
-        opacity: 0.55;
-    }
-
-    50% {
-        opacity: 1;
-    }
-}
-
-.sombra-brillo {
-    filter: drop-shadow(0 0 6px currentColor);
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .animar-aparicion,
-    .animar-suave,
-    .barra-crecer,
-    .ruta-flujo,
-    .nodo-pulso {
-        animation: none;
-    }
+/* Línea de micro-perforación: semicírculos recortados en el papel */
+.tipo-perforacion {
+    height: 8px;
+    background-image: radial-gradient(
+        circle at 4px 4px,
+        transparent 3px,
+        currentColor 3px,
+        currentColor 4px,
+        transparent 4px
+    );
+    background-size: 8px 8px;
+    background-repeat: repeat-x;
+    opacity: 0.5;
 }
 </style>
