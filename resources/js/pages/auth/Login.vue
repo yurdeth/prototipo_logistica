@@ -89,7 +89,10 @@ defineProps<{
 
             <Button
                 type="submit"
-                class="mt-4 w-full"
+                class="mt-4 w-full text-white transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98]"
+                :style="{
+                    backgroundColor: '#2563EB',
+                }"
                 :tabindex="4"
                 :disabled="processing"
                 data-test="login-button"

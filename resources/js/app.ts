@@ -30,8 +30,12 @@ void createInertiaApp({
             },
         });
     },
+    defaults: {
+        // Transición suave entre páginas (View Transitions API, con fallback del navegador)
+        visitOptions: () => ({ viewTransition: true }),
+    },
     progress: {
-        color: '#4B5563',
+        color: '#2563EB',
     },
 });
 
