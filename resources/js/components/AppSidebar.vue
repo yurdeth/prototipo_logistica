@@ -5,6 +5,7 @@ import AppLogo from '@/components/AppLogo.vue';
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
+import { Package, Route, Users, Truck, Building2, FileText } from '@/UI/Icons';
 import {
     Sidebar,
     SidebarContent,
@@ -23,6 +24,12 @@ const mainNavItems: NavItem[] = [
         href: dashboard(),
         icon: LayoutGrid,
     },
+    { title: 'Envíos', href: '#', icon: Package },
+    { title: 'Rutas', href: '#', icon: Route },
+    { title: 'Repartidores', href: '#', icon: Users },
+    { title: 'Vehículos', href: '#', icon: Truck },
+    { title: 'Clientes', href: '#', icon: Building2 },
+    { title: 'Reportes', href: '#', icon: FileText },
 ];
 
 const footerNavItems: NavItem[] = [
