@@ -18,6 +18,11 @@ import {
     AlertTriangle,
     ChevronRight,
     Clock,
+    Database,
+    Waypoints,
+    ArrowRight,
+    TrendingUp,
+    PackageCheck,
 } from 'lucide-vue-next';
 
 // Exportamos todos los iconos que utilizaremos en diferentes componentes de la aplicación.
@@ -40,4 +45,9 @@ export {
     AlertTriangle,
     ChevronRight,
     Clock,
+    Database,
+    Waypoints,
+    ArrowRight,
+    TrendingUp,
+    PackageCheck,
 };
