@@ -10,10 +10,32 @@ permissions:
   contents: read
 
 jobs:
-  ci:
-    runs-on: ubuntu-latest
+    ci:
+        runs-on: ubuntu-latest
 
-    steps:
+        env:
+            DB_CONNECTION: pgsql
+            DB_HOST: 127.0.0.1
+            DB_PORT: 5432
+            DB_DATABASE: prototipo_logistica_testing
+            DB_USERNAME: postgres
+            DB_PASSWORD: postgres
+
+        services:
+            postgres:
+                image: 'postgis/postgis:17-3.5-alpine'
+                env:
+                    POSTGRES_PASSWORD: postgres
+                    POSTGRES_DB: prototipo_logistica_testing
+                ports:
+                    - 5432:5432
+                options: >-
+                    --health-cmd "pg_isready -U postgres"
+                    --health-interval 10s
+                    --health-timeout 5s
+                    --health-retries 5
+
+        steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
