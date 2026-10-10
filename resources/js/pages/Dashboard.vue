@@ -68,9 +68,9 @@ const soft = (hex: string, alpha = '1A') => `${hex}${alpha}`;
                 :style="
                     tab === item.key
                         ? {
-                              backgroundColor: colors.azulClaro,
-                              borderColor: colors.azulClaro,
-                          }
+                            backgroundColor: colors.azulClaro,
+                            borderColor: colors.azulClaro,
+                        }
                         : undefined
                 "
                 @click="tab = item.key"
@@ -198,28 +198,43 @@ const soft = (hex: string, alpha = '1A') => `${hex}${alpha}`;
 
             <!-- Flujo de información -->
             <div
-                class="flex flex-col rounded-xl p-5 text-white"
-                :style="{ backgroundColor: colors.azulOscuro }"
+                class="flex flex-col rounded-xl border border-sidebar-border/70 bg-card p-5"
             >
-                <span class="text-xs" :style="{ color: colors.grisClaro }">
+                <span class="text-xs text-muted-foreground">
                     Flujo de información
                 </span>
 
-                <p class="mt-1 text-sm font-medium">
+                <p class="mt-1 text-sm font-medium text-foreground">
                     Datos → Procesamiento → Indicadores → Análisis
                 </p>
 
                 <div class="mt-auto grid gap-3 pt-6">
                     <div
-                        v-for="step in flowSteps"
+                        v-for="(step, index) in flowSteps"
                         :key="step"
-                        class="rounded-lg bg-white/10 px-3 py-2 text-xs"
-                        :style="{ color: colors.grisClaro }"
+                        class="flex items-center gap-3 rounded-lg border border-sidebar-border/70 px-3 py-3 text-xs text-foreground"
                     >
-                        {{ step }}
+                        <span
+                            class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-xs font-semibold"
+                            :style="{
+                                color: index === flowSteps.length - 1
+                                    ? colors.naranjaClaro
+                                    : colors.azulClaro,
+                                backgroundColor: soft(
+                                    index === flowSteps.length - 1
+                                        ? colors.naranjaClaro
+                                        : colors.azulClaro
+                                ),
+                            }"
+                        >
+                            {{ index + 1 }}
+                        </span>
+
+                        <span>{{ step }}</span>
                     </div>
                 </div>
             </div>
+
         </div>
 
         <!-- Dos columnas: pedidos y estado -->

@@ -23,6 +23,13 @@ import {
     ArrowRight,
     TrendingUp,
     PackageCheck,
+    Download, 
+    Search,
+    Timer,
+    Scale,
+    ChevronLeft,
+    ChevronUp, 
+    ChevronDown
 } from 'lucide-vue-next';
 
 // Exportamos todos los iconos que utilizaremos en diferentes componentes de la aplicación.
@@ -50,4 +57,11 @@ export {
     ArrowRight,
     TrendingUp,
     PackageCheck,
+    Download, 
+    Search,
+    Timer, 
+    Scale,
+    ChevronLeft,
+    ChevronUp, 
+    ChevronDown
 };
