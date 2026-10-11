@@ -21,6 +21,9 @@ Route::middleware(['auth'])->group(function () {
     Route::inertia('rutas', 'rutas/RutasIndex')->name('rutas');
     Route::inertia('rutas/crear', 'rutas/RutasCreate')->name('rutas.create');
 
+    // Vistas del parque de vehículos; los endpoints están en routes/api.php
+    Route::inertia('vehiculos', 'flota/VehiculosIndex')->name('vehiculos.index');
+    Route::inertia('vehiculos/crear', 'flota/VehiculosCreate')->name('vehiculos.create');
 });
 
 require __DIR__.'/settings.php';

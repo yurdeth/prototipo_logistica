@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\CheckRole;
+use App\Http\Middleware\EnsureApiTokenCookie;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\NoBrowserCacheMiddleware;
@@ -18,7 +19,8 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
+        // api_token debe leerse en claro desde la SPA para enviarlo como Bearer
+        $middleware->encryptCookies(except: ['appearance', 'sidebar_state', 'api_token']);
 
         $middleware->alias([
             'role' => CheckRole::class,
@@ -27,6 +29,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             HandleAppearance::class,
             HandleInertiaRequests::class,
+            EnsureApiTokenCookie::class,
             AddLinkHeadersForPreloadedAssets::class,
             NoBrowserCacheMiddleware::class,
         ]);

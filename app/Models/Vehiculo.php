@@ -7,9 +7,15 @@ use Illuminate\Database\Eloquent\Attributes\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Carbon;
 
 /**
+ * Vehículo de la flota, identificado por su placa en formato nacional salvadoreño:
+ * letra de categoría + 6 dígitos (P particular, C carga, M motocicleta, A transporte
+ * público, N no remunerado, RE remolques, CD cuerpo diplomático, CC cuerpo consular).
+ * La validación del formato vive en StoreVehiculoRequest::FORMATO_PLACA.
+ *
  * @property int $id_vehiculo
  * @property string $placa
  * @property int $tipo_vehiculo_id
@@ -50,6 +56,21 @@ class Vehiculo extends Model
     public function sucursal(): BelongsTo
     {
         return $this->belongsTo(Sucursal::class, 'sucursal_id', 'id_sucursal');
+    }
+
+    /**
+     * Registro marca-modelo del vehículo en la pivote flota.vehiculo_marca_modelo.
+     *
+     * @return BelongsToMany<ModeloVehiculo, $this>
+     */
+    public function modelos(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            ModeloVehiculo::class,
+            'flota.vehiculo_marca_modelo',
+            'vehiculo_id',
+            'modelo_vehiculo_id',
+        )->withPivot('marca_vehiculo_id');
     }
 
     /**
