@@ -9,10 +9,11 @@ class EstadoVehiculoSeeder extends Seeder
 {
     /**
      * Estados operativos de la flota según el documento de análisis.
+     * INACTIVO se usa para dar de baja un vehículo sin borrar su historial.
      *
      * @var list<string>
      */
-    private const ESTADOS = ['DISPONIBLE', 'EN RUTA', 'MANTENIMIENTO'];
+    private const ESTADOS = ['DISPONIBLE', 'EN RUTA', 'MANTENIMIENTO', 'INACTIVO'];
 
     public function run(): void
     {

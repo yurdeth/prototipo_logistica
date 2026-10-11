@@ -24,6 +24,7 @@ Route::middleware(['auth'])->group(function () {
     // Vistas del parque de vehículos; los endpoints están en routes/api.php
     Route::inertia('vehiculos', 'flota/VehiculosIndex')->name('vehiculos.index');
     Route::inertia('vehiculos/crear', 'flota/VehiculosCreate')->name('vehiculos.create');
+    Route::inertia('vehiculos/{vehiculo}/editar', 'flota/VehiculosEdit')->name('vehiculos.edit');
 });
 
 require __DIR__.'/settings.php';

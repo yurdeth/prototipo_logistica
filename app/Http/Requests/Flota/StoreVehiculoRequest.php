@@ -17,9 +17,11 @@ class StoreVehiculoRequest extends FormRequest
     /**
      * Letras de categoría del formato nacional de placas de El Salvador:
      * P particular, C carga, M motocicleta, A transporte público, N no remunerado,
-     * RE remolques, CD cuerpo diplomático y CC cuerpo consular, seguidas de 6 dígitos.
+     * MB microbús y AB transporte colectivo, RE remolques, CD cuerpo diplomático
+     * y CC cuerpo consular. La cantidad de dígitos varía según la emisión
+     * (las placas antiguas son más cortas), entre 3 y 6.
      */
-    private const FORMATO_PLACA = '/^(P|C|M|A|N|RE|CD|CC)\d{6}$/';
+    protected const FORMATO_PLACA = '/^(P|C|M|A|N|MB|AB|RE|CD|CC)\d{3,6}$/';
 
     /**
      * Normaliza la placa antes de validar: mayúsculas, sin espacios ni guiones.
@@ -80,7 +82,7 @@ class StoreVehiculoRequest extends FormRequest
         return [
             'placa.required' => 'La placa es obligatoria.',
             'placa.max' => 'La placa no puede tener más de 15 caracteres.',
-            'placa.regex' => 'La placa no coincide con el formato nacional: letra de categoría (P, C, M, A, N, RE, CD o CC) seguida de 6 dígitos, por ejemplo P123456.',
+            'placa.regex' => 'La placa no coincide con el formato nacional: letra de categoría (P, C, M, A, N, MB, AB, RE, CD o CC) seguida de 3 a 6 dígitos, por ejemplo P123456.',
             'placa.unique' => 'Ya existe un vehículo registrado con esa placa.',
             'tipo_vehiculo_id.required' => 'Selecciona el tipo de vehículo.',
             'tipo_vehiculo_id.exists' => 'El tipo de vehículo seleccionado no existe.',

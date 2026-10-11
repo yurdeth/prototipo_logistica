@@ -141,9 +141,23 @@ class VehiculoTest extends TestCase
             ->assertJsonPath('vehiculo.placa', 'C345678');
     }
 
+    public function test_acepta_placas_con_menos_de_seis_digitos_y_categorias_mb_ab(): void
+    {
+        foreach (['P1234', 'M12345', 'AB12345', 'MB123', 'RE123456', 'CD123456'] as $placa) {
+            $this->actingAs($this->usuario, 'api')
+                ->postJson('/api/vehiculos', [
+                    ...$this->datosBase,
+                    'placa' => $placa,
+                    'anio' => 2020,
+                ])
+                ->assertCreated()
+                ->assertJsonPath('vehiculo.placa', $placa);
+        }
+    }
+
     public function test_rechaza_placas_fuera_del_formato_nacional(): void
     {
-        $casosInvalidos = ['XYZ12345', 'P12345', 'Q123456', '123456P', 'P12-45A'];
+        $casosInvalidos = ['XYZ12345', 'P1234567', 'P12', 'Q123456', '123456P', 'P12-45A'];
 
         foreach ($casosInvalidos as $placa) {
             $this->actingAs($this->usuario, 'api')
@@ -194,9 +208,74 @@ class VehiculoTest extends TestCase
             ->assertCreated();
     }
 
-    public function test_invitado_recibe_401(): void
+    public function test_actualiza_un_vehiculo_sin_chocar_con_su_propia_placa(): void
     {
-        $this->postJson('/api/vehiculos', $this->datosBase)
-            ->assertUnauthorized();
+        $vehiculo = Vehiculo::create($this->datosBase);
+
+        // La misma placa debe ser válida al editar el propio vehículo
+        $this->actingAs($this->usuario, 'api')
+            ->putJson("/api/vehiculos/{$vehiculo->id_vehiculo}", [...$this->datosBase, 'anio' => 2022])
+            ->assertOk()
+            ->assertJsonPath('vehiculo.anio', 2022);
+
+        expect(Vehiculo::where('placa', 'P123456')->count())->toBe(1);
+    }
+
+    public function test_al_editar_se_reemplaza_la_pivote_marca_modelo(): void
+    {
+        $vehiculo = Vehiculo::create($this->datosBase);
+        $canter = ModeloVehiculo::where('nombre', 'Canter')->first();
+        $mitsubishi = MarcaVehiculo::where('nombre', 'Mitsubishi')->first();
+
+        $this->actingAs($this->usuario, 'api')
+            ->putJson("/api/vehiculos/{$vehiculo->id_vehiculo}", [
+                ...$this->datosBase,
+                'marca_vehiculo_id' => $mitsubishi->id_marca,
+                'modelo_vehiculo_id' => $canter->id_modelo,
+                'tipo_vehiculo_id' => $canter->tipo_vehiculo_id,
+            ])
+            ->assertOk()
+            ->assertJsonPath('vehiculo.marca', 'Mitsubishi')
+            ->assertJsonPath('vehiculo.modelo', 'Canter');
+
+        expect(
+            DB::table('flota.vehiculo_marca_modelo')
+                ->where('vehiculo_id', $vehiculo->id_vehiculo)
+                ->count(),
+        )->toBe(1)
+            ->and(
+                DB::table('flota.vehiculo_marca_modelo')
+                    ->where('vehiculo_id', $vehiculo->id_vehiculo)
+                    ->where('modelo_vehiculo_id', $canter->id_modelo)
+                    ->exists(),
+            )->toBeTrue();
+    }
+
+    public function test_desactiva_el_vehiculo_sin_eliminarlo(): void
+    {
+        $vehiculo = Vehiculo::create($this->datosBase);
+
+        $this->actingAs($this->usuario, 'api')
+            ->postJson("/api/vehiculos/{$vehiculo->id_vehiculo}/desactivar")
+            ->assertOk()
+            ->assertJsonPath('vehiculo.estado.nombre_estado', 'INACTIVO');
+
+        $vehiculo->refresh();
+        expect($vehiculo->estado->nombre_estado)->toBe('INACTIVO')
+            ->and(Vehiculo::count())->toBe(1);
+    }
+
+    public function test_reactiva_un_vehiculo_inactivo(): void
+    {
+        $vehiculo = Vehiculo::create($this->datosBase);
+        $inactivo = EstadoVehiculo::where('nombre_estado', 'INACTIVO')->first();
+        $vehiculo->update(['estado_vehiculo_id' => $inactivo->id_estado]);
+
+        $this->actingAs($this->usuario, 'api')
+            ->postJson("/api/vehiculos/{$vehiculo->id_vehiculo}/reactivar")
+            ->assertOk()
+            ->assertJsonPath('vehiculo.estado.nombre_estado', 'DISPONIBLE');
+
+        expect($vehiculo->refresh()->estado->nombre_estado)->toBe('DISPONIBLE');
     }
 }

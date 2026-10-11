@@ -34,15 +34,17 @@ export interface Vehiculo {
 }
 
 /* ───────── Placas: formato nacional (El Salvador) ─────────
- * La placa es la letra(s) de categoría del vehículo seguida de 6 dígitos (7 u 8 caracteres):
+ * La placa es la letra(s) de categoría del vehículo seguida de 3 a 6 dígitos
+ * (las emisiones antiguas tienen placas más cortas):
  *   P  Particular            C  Carga
  *   M  Motocicleta           A  Transporte público
- *   N  No remunerado         RE Remolques
- *   CD Cuerpo diplomático    CC Cuerpo consular
- * Ejemplos válidos: P123456, C345678, M123456, RE123456.
+ *   N  No remunerado         MB Microbús / AB Transporte colectivo
+ *   RE Remolques             CD Cuerpo diplomático
+ *   CC Cuerpo consular
+ * Ejemplos válidos: P123456, C345678, M1234, AB12345.
  * El servidor valida la misma regla en StoreVehiculoRequest::FORMATO_PLACA.
  */
-export const FORMATO_PLACA = /^(P|C|M|A|N|RE|CD|CC)\d{6}$/;
+export const FORMATO_PLACA = /^(P|C|M|A|N|MB|AB|RE|CD|CC)\d{3,6}$/;
 
 // Mayúsculas, sin espacios ni guiones (misma normalización que aplica el servidor).
 export const normalizarPlaca = (valor: string) =>
@@ -53,6 +55,7 @@ export const estadoInfo: Record<string, { label: string; color: string }> = {
     DISPONIBLE: { label: 'Disponible', color: colors.verde },
     'EN RUTA': { label: 'En ruta', color: colors.amarillo },
     MANTENIMIENTO: { label: 'En mantenimiento', color: colors.rojo },
+    INACTIVO: { label: 'Inactivo', color: colors.grisMedio },
 };
 
 export const colorDeEstado = (nombre: string) =>
@@ -152,6 +155,7 @@ export const estadosVehiculoDemo: EstadoVehiculo[] = [
     { id_estado: 1, nombre_estado: 'DISPONIBLE' },
     { id_estado: 2, nombre_estado: 'EN RUTA' },
     { id_estado: 3, nombre_estado: 'MANTENIMIENTO' },
+    { id_estado: 4, nombre_estado: 'INACTIVO' },
 ];
 
 export const sucursalesVehiculoDemo: SucursalVehiculo[] = [

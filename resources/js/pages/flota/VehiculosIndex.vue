@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { Head } from '@inertiajs/vue3';
-import { create as crearRuta } from '@/routes/vehiculos';
+import { Head, router } from '@inertiajs/vue3';
+import { create as crearRuta, edit as editarRuta } from '@/routes/vehiculos';
 import { dashboard } from '@/routes';
 import { colors } from '@/UI/Colors';
 import {
@@ -181,7 +181,13 @@ const columnas: Columna[] = [
                 :vacio="!filtrados.length"
                 empty-title="No se encontraron vehículos"
             >
-                <BiTableRow v-for="v in filtrados" :key="v.id_vehiculo">
+                <BiTableRow
+                    v-for="v in filtrados"
+                    :key="v.id_vehiculo"
+                    @select="
+                        router.visit(editarRuta({ vehiculo: v.id_vehiculo }))
+                    "
+                >
                     <!-- Identificación del vehículo. -->
                     <td class="px-5 py-4">
                         <p
