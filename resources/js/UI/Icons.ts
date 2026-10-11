@@ -30,6 +30,7 @@ import {
     ChevronLeft,
     ChevronUp,
     ChevronDown,
+    DollarSign,
 } from 'lucide-vue-next';
 
 // Exportamos todos los iconos que utilizaremos en diferentes componentes de la aplicación.
@@ -64,4 +65,5 @@ export {
     ChevronLeft,
     ChevronUp,
     ChevronDown,
+    DollarSign,
 };

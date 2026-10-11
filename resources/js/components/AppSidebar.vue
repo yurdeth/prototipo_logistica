@@ -15,7 +15,7 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { dashboard, envios } from '@/routes';
+import { dashboard, envios, rutas } from '@/routes';
 import type { NavItem } from '@/types';
 
 const mainNavItems: NavItem[] = [
@@ -25,7 +25,7 @@ const mainNavItems: NavItem[] = [
         icon: LayoutGrid,
     },
     { title: 'Envíos', href: envios(), icon: Package },
-    { title: 'Rutas', href: '#', icon: Route },
+    { title: 'Rutas', href: rutas(), icon: Route },
     { title: 'Repartidores', href: '#', icon: Users },
     { title: 'Vehículos', href: '#', icon: Truck },
     { title: 'Clientes', href: '#', icon: Building2 },

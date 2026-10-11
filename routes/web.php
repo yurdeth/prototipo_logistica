@@ -9,8 +9,17 @@ Route::redirect('email/verify/{any?}', '/dashboard')->where('any', '.*');
 
 Route::middleware(['auth'])->group(function () {
     Route::inertia('dashboard', 'Dashboard')->name('dashboard');
+
+    /*  Rutas provisionales para diseño de interfaces
+        --------------------------------------------------------------------------
+        Estas rutas se definen temporalmente mediante Route::inertia()
+        para visualizar y desarrollar las interfaces del sistema.
+        Por el momento, se utilizan únicamente con fines de diseño
+    */
     Route::inertia('envios', 'shipments/EnviosIndex')->name('envios');
     Route::inertia('envios/crear', 'shipments/EnviosCreate')->name('envios.create');
+    Route::inertia('rutas', 'rutas/RutasIndex')->name('rutas');
+    Route::inertia('rutas/crear', 'rutas/RutasCreate')->name('rutas.create');
 
 });
 

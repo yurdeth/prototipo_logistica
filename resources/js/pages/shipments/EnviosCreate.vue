@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
-import { Head, Link, useForm } from '@inertiajs/vue3';
-import { colors } from '@/UI/Colors';
-import { ChevronLeft, CheckCircle2, AlertTriangle, Truck } from '@/UI/Icons';
+import { Head, useForm } from '@inertiajs/vue3';
+import { Truck } from '@/UI/Icons';
 import { dashboard } from '@/routes';
 import { prioridadInfo, type Prioridad } from '@/config/Envios/envios';
 import {
@@ -14,6 +13,26 @@ import {
     type ClienteOpcion,
     type Opcion,
 } from '@/config/Envios/envioForm';
+import {
+    H,
+    aInputLocal,
+    esPositivo,
+    fmtNumero,
+    soft,
+    type Aviso,
+} from '@/lib/formularios';
+import { useChecklist } from '@/composables/useChecklist';
+import FormPage from '@/components/Forms/FormPage.vue';
+import FormSection from '@/components/Forms/FormSection.vue';
+import StatCard from '@/components/Forms/StatCard.vue';
+import SelectField from '@/components/Forms/SelectField.vue';
+import InputField from '@/components/Forms/InputField.vue';
+import SummaryPanel from '@/components/Forms/SummaryPanel.vue';
+import SummaryGroup from '@/components/Forms/SummaryGroup.vue';
+import SummaryItem from '@/components/Forms/SummaryItem.vue';
+import ChecklistProgress from '@/components/Forms/ChecklistProgress.vue';
+import ObservacionesPanel from '@/components/Forms/ObservacionesPanel.vue';
+import FormActions from '@/components/Forms/FormActions.vue';
 
 defineOptions({
     layout: {
@@ -25,7 +44,7 @@ defineOptions({
     },
 });
 
-// Utiliza datos de demostración cuando Laravel no proporciona opciones.
+// Usa datos de demostración cuando Laravel no proporciona opciones.
 const props = withDefaults(
     defineProps<{
         clientes?: ClienteOpcion[];
@@ -39,11 +58,7 @@ const props = withDefaults(
     },
 );
 
-const H = 3_600_000;
-const ahora = ref(Date.now());
-let reloj: ReturnType<typeof setInterval> | undefined;
-
-// Define los campos que se envían al controlador de Laravel.
+/* ───────── Formulario ───────── */
 const form = useForm({
     cliente_remitente_id: null as number | null,
     cliente_destinatario_id: null as number | null,
@@ -56,17 +71,26 @@ const form = useForm({
     fecha_comprometida: '',
 });
 
-// Formatea fechas para el campo datetime-local, usando la hora local.
-const pad = (n: number) => String(n).padStart(2, '0');
+const prioridades = Object.keys(prioridadInfo) as Prioridad[];
 
-const aInputLocal = (fecha: Date) =>
-    `${fecha.getFullYear()}-${pad(fecha.getMonth() + 1)}-${pad(fecha.getDate())}T${pad(fecha.getHours())}:${pad(fecha.getMinutes())}`;
+const gruposClientes = computed(() => [
+    {
+        label: 'Empresas',
+        options: props.clientes.filter((c) => c.tipo_cliente === 'EMPRESA'),
+    },
+    {
+        label: 'Personas',
+        options: props.clientes.filter((c) => c.tipo_cliente === 'PERSONA'),
+    },
+]);
 
-// Calcula la fecha sugerida y la fecha mínima según la hora actual.
+/* ───────── Compromiso de entrega ───────── */
+const ahora = ref(Date.now());
+let reloj: ReturnType<typeof setInterval> | undefined;
+
 const sugerida = computed(() =>
     aInputLocal(new Date(ahora.value + horasCompromiso[form.prioridad] * H)),
 );
-
 const minimo = computed(() => aInputLocal(new Date(ahora.value)));
 const manual = ref(false);
 
@@ -77,15 +101,11 @@ const usarSugerida = () => {
 
 onMounted(() => {
     usarSugerida();
-    // Actualiza los plazos para evitar mostrar información desactualizada.
-    reloj = setInterval(() => {
-        ahora.value = Date.now();
-    }, 60_000);
+    // Refresca los plazos para no mostrar información desactualizada.
+    reloj = setInterval(() => (ahora.value = Date.now()), 60_000);
 });
 
-onUnmounted(() => {
-    if (reloj) clearInterval(reloj);
-});
+onUnmounted(() => reloj && clearInterval(reloj));
 
 // Actualiza la fecha sugerida solo si el usuario no la modificó.
 watch(
@@ -95,48 +115,64 @@ watch(
     },
 );
 
-// Agrupa los datos necesarios para el resumen del envío.
+/* ───────── Resumen ───────── */
 const nombreDe = (lista: Opcion[], id: number | null) =>
-    lista.find((opcion) => opcion.id === id)?.nombre ?? null;
+    lista.find((o) => o.id === id)?.nombre ?? null;
 
-const resumen = computed(() => {
-    const fecha = form.fecha_comprometida
-        ? new Date(form.fecha_comprometida).getTime()
-        : NaN;
+const remitente = computed(() =>
+    nombreDe(props.clientes, form.cliente_remitente_id),
+);
+const destinatario = computed(() =>
+    nombreDe(props.clientes, form.cliente_destinatario_id),
+);
+const origen = computed(() =>
+    nombreDe(props.sucursales, form.sucursal_origen_id),
+);
+const destino = computed(() =>
+    nombreDe(props.territorios, form.territorio_destino_id),
+);
 
-    const horas = Number.isFinite(fecha) ? (fecha - ahora.value) / H : null;
+const compromisoMs = computed(() =>
+    form.fecha_comprometida ? new Date(form.fecha_comprometida).getTime() : NaN,
+);
 
-    return {
-        remitente: nombreDe(props.clientes, form.cliente_remitente_id),
-        destinatario: nombreDe(props.clientes, form.cliente_destinatario_id),
-        origen: nombreDe(props.sucursales, form.sucursal_origen_id),
-        destino: nombreDe(props.territorios, form.territorio_destino_id),
-        horas,
-        compromisoTexto:
-            horas === null
-                ? null
-                : new Date(fecha).toLocaleString('es-SV', {
-                      weekday: 'short',
-                      day: '2-digit',
-                      month: 'short',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                  }),
-    };
-});
+const horas = computed(() =>
+    Number.isFinite(compromisoMs.value)
+        ? (compromisoMs.value - ahora.value) / H
+        : null,
+);
+
+const compromisoTexto = computed(() =>
+    horas.value === null
+        ? null
+        : new Date(compromisoMs.value).toLocaleString('es-SV', {
+              weekday: 'short',
+              day: '2-digit',
+              month: 'short',
+              hour: '2-digit',
+              minute: '2-digit',
+          }),
+);
 
 const plazoTexto = computed(() => {
-    const horas = resumen.value.horas;
+    if (horas.value === null) return '—';
+    if (horas.value <= 0) return 'fecha ya vencida';
 
-    if (horas === null) return '—';
-    if (horas <= 0) return 'fecha ya vencida';
-
-    return horas >= 48
-        ? `en ${(horas / 24).toFixed(1)} días`
-        : `en ${Math.ceil(horas)} horas`;
+    return horas.value >= 48
+        ? `en ${(horas.value / 24).toFixed(1)} días`
+        : `en ${Math.ceil(horas.value)} horas`;
 });
 
-// Comprueba los campos obligatorios antes de habilitar el registro.
+const pesoTexto = computed(() =>
+    esPositivo(form.peso_kg) ? `${Number(form.peso_kg).toFixed(2)} kg` : '—',
+);
+const volumenTexto = computed(() =>
+    esPositivo(form.volumen_m3)
+        ? `${Number(form.volumen_m3).toFixed(2)} m³`
+        : '—',
+);
+
+/* ───────── Validación ───────── */
 const checklist = computed(() => [
     { label: 'Remitente', ok: form.cliente_remitente_id !== null },
     { label: 'Destinatario', ok: form.cliente_destinatario_id !== null },
@@ -146,401 +182,203 @@ const checklist = computed(() => [
         label: 'Dirección de entrega',
         ok: form.direccion_destino.trim().length > 0,
     },
-    {
-        label: 'Peso',
-        ok:
-            form.peso_kg !== '' &&
-            Number.isFinite(Number(form.peso_kg)) &&
-            Number(form.peso_kg) > 0,
-    },
+    { label: 'Peso', ok: esPositivo(form.peso_kg) },
     {
         label: 'Compromiso de entrega',
-        ok: resumen.value.horas !== null && resumen.value.horas > 0,
+        ok: horas.value !== null && horas.value > 0,
     },
 ]);
 
-const completados = computed(
-    () => checklist.value.filter((campo) => campo.ok).length,
-);
+const { completados, total, completo } = useChecklist(checklist);
 
-const completo = computed(() => completados.value === checklist.value.length);
-
-// Advierte sobre combinaciones que requieren revisión.
-const avisos = computed(() => {
-    const lista: string[] = [];
-    const horas = resumen.value.horas;
-    const peso = Number(form.peso_kg);
+const avisos = computed<Aviso[]>(() => {
+    const lista: Aviso[] = [];
+    const h = horas.value;
+    const aviso = (texto: string) => lista.push({ texto, grave: false });
 
     if (
         form.cliente_remitente_id !== null &&
         form.cliente_remitente_id === form.cliente_destinatario_id
     ) {
-        lista.push('El remitente y el destinatario son el mismo cliente.');
+        aviso('El remitente y el destinatario son el mismo cliente.');
     }
 
-    if (form.peso_kg !== '' && peso >= PESO_CARGA_PESADA) {
-        lista.push(
+    if (esPositivo(form.peso_kg) && Number(form.peso_kg) >= PESO_CARGA_PESADA) {
+        aviso(
             `Carga pesada (${PESO_CARGA_PESADA} kg o más): verifica la capacidad del vehículo.`,
         );
     }
 
-    if (form.prioridad === 'URGENTE' && horas !== null && horas > 48) {
-        lista.push(
-            'La prioridad urgente tiene un compromiso superior a 48 horas.',
-        );
+    if (form.prioridad === 'URGENTE' && h !== null && h > 48) {
+        aviso('La prioridad urgente tiene un compromiso superior a 48 horas.');
     }
 
-    if (
-        form.prioridad === 'BAJA' &&
-        horas !== null &&
-        horas > 0 &&
-        horas < 48
-    ) {
-        lista.push('La prioridad baja tiene un plazo inferior a 48 horas.');
+    if (form.prioridad === 'BAJA' && h !== null && h > 0 && h < 48) {
+        aviso('La prioridad baja tiene un plazo inferior a 48 horas.');
     }
 
     return lista;
 });
 
-// Envía los datos y conserva la posición de la página ante errores.
+/* ───────── Envío ───────── */
 const enviar = () => {
     if (!completo.value || form.processing) return;
-    form.post('/envios', {
-        preserveScroll: true,
-    });
+    form.post('/envios', { preserveScroll: true });
 };
-
-// Centraliza los estilos reutilizados en el formulario.
-const soft = (hex: string, alpha = '1A') => `${hex}${alpha}`;
-const inputClase =
-    'h-10 w-full rounded-lg border border-sidebar-border/70 bg-card px-3 text-sm text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none';
-const labelClase = 'mb-1.5 block text-xs font-medium text-muted-foreground';
-const prioridades = Object.keys(prioridadInfo) as Prioridad[];
-// Separa los clientes por tipo para llenar los selectores.
-const empresas = computed(() =>
-    props.clientes.filter((cliente) => cliente.tipo_cliente === 'EMPRESA'),
-);
-const personas = computed(() =>
-    props.clientes.filter((cliente) => cliente.tipo_cliente === 'PERSONA'),
-);
 </script>
 
 <template>
     <Head title="Nuevo envío" />
 
-    <div class="flex h-full flex-1 flex-col gap-4 overflow-x-auto p-4">
-        <!-- Encabezado y navegación -->
-        <header class="flex flex-wrap items-center justify-between gap-3">
-            <div>
-                <h1 class="text-xl font-semibold text-foreground">
-                    Nuevo envío
-                </h1>
-                <p class="text-sm text-muted-foreground">
-                    Registra el envío y define su compromiso de entrega
-                </p>
-            </div>
+    <FormPage
+        title="Registrar envío"
+        description="Registra el envío y define su compromiso de entrega."
+        :crumbs="[
+            { label: 'Gestión logística', href: '/envios' },
+            { label: 'Envíos' },
+        ]"
+        back-href="/envios"
+        back-label="Volver a envíos"
+    >
+        <!-- Resumen superior -->
+        <section class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <StatCard
+                label="Peso"
+                :value="
+                    esPositivo(form.peso_kg)
+                        ? fmtNumero(Number(form.peso_kg), 2)
+                        : '—'
+                "
+                unit="kg"
+                hint="Carga del envío"
+            />
+            <StatCard
+                label="Prioridad"
+                :value="prioridadInfo[form.prioridad].label"
+                :hint="`Plazo base de ${horasCompromiso[form.prioridad]} h`"
+            />
+            <StatCard
+                label="Entrega"
+                :value="plazoTexto"
+                :hint="compromisoTexto ?? 'Sin fecha definida'"
+            />
+            <StatCard
+                label="Estado de preparación"
+                :value="`${completados}/${total}`"
+                :dot="completo ? 'ok' : 'pending'"
+                hint="Campos obligatorios"
+            />
+        </section>
 
-            <Link
-                href="/envios"
-                class="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-            >
-                <ChevronLeft class="h-4 w-4" aria-hidden="true" />
-                Volver a envíos
-            </Link>
-        </header>
-
-        <!-- Formulario principal y resumen lateral -->
         <form
-            class="grid items-start gap-4 lg:grid-cols-3"
+            class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_350px]"
             @submit.prevent="enviar"
         >
-            <div class="flex flex-col gap-4 lg:col-span-2">
-                <!-- 1. Selección de remitente y destinatario -->
-                <section
-                    class="rounded-xl border border-sidebar-border/70 bg-card p-5"
-                    aria-labelledby="clientes-titulo"
+            <div class="min-w-0 space-y-6">
+                <!-- 1. Clientes -->
+                <FormSection
+                    :step="1"
+                    title="Clientes"
+                    description="Quién envía y quién recibe el paquete."
                 >
-                    <h2
-                        id="clientes-titulo"
-                        class="mb-4 flex items-center gap-2 text-base font-medium text-foreground"
-                    >
-                        <span
-                            class="flex h-6 w-6 items-center justify-center rounded-full text-xs text-white"
-                            :style="{ backgroundColor: colors.azulClaro }"
-                        >
-                            1
-                        </span>
-                        Clientes
-                    </h2>
-
-                    <div class="grid gap-4 sm:grid-cols-2">
-                        <div>
-                            <label for="remitente" :class="labelClase">
-                                Remitente *
-                            </label>
-                            <select
-                                id="remitente"
-                                v-model="form.cliente_remitente_id"
-                                required
-                                :class="inputClase"
-                                :aria-invalid="
-                                    !!form.errors.cliente_remitente_id
-                                "
-                            >
-                                <option :value="null" disabled>
-                                    Selecciona un cliente
-                                </option>
-                                <optgroup label="Empresas">
-                                    <option
-                                        v-for="c in empresas"
-                                        :key="c.id"
-                                        :value="c.id"
-                                    >
-                                        {{ c.nombre }}
-                                    </option>
-                                </optgroup>
-                                <optgroup label="Personas">
-                                    <option
-                                        v-for="c in personas"
-                                        :key="c.id"
-                                        :value="c.id"
-                                    >
-                                        {{ c.nombre }}
-                                    </option>
-                                </optgroup>
-                            </select>
-                            <p
-                                v-if="form.errors.cliente_remitente_id"
-                                class="mt-1 text-xs"
-                                :style="{ color: colors.rojo }"
-                            >
-                                {{ form.errors.cliente_remitente_id }}
-                            </p>
-                        </div>
-
-                        <div>
-                            <label for="destinatario" :class="labelClase">
-                                Destinatario *
-                            </label>
-                            <select
-                                id="destinatario"
-                                v-model="form.cliente_destinatario_id"
-                                required
-                                :class="inputClase"
-                                :aria-invalid="
-                                    !!form.errors.cliente_destinatario_id
-                                "
-                            >
-                                <option :value="null" disabled>
-                                    Selecciona un cliente
-                                </option>
-                                <optgroup label="Empresas">
-                                    <option
-                                        v-for="c in empresas"
-                                        :key="c.id"
-                                        :value="c.id"
-                                    >
-                                        {{ c.nombre }}
-                                    </option>
-                                </optgroup>
-                                <optgroup label="Personas">
-                                    <option
-                                        v-for="c in personas"
-                                        :key="c.id"
-                                        :value="c.id"
-                                    >
-                                        {{ c.nombre }}
-                                    </option>
-                                </optgroup>
-                            </select>
-                            <p
-                                v-if="form.errors.cliente_destinatario_id"
-                                class="mt-1 text-xs"
-                                :style="{ color: colors.rojo }"
-                            >
-                                {{ form.errors.cliente_destinatario_id }}
-                            </p>
-                        </div>
+                    <div class="grid gap-5 sm:grid-cols-2">
+                        <SelectField
+                            id="remitente"
+                            v-model="form.cliente_remitente_id"
+                            label="Remitente"
+                            placeholder="Selecciona un cliente"
+                            :groups="gruposClientes"
+                            required
+                            :error="form.errors.cliente_remitente_id"
+                        />
+                        <SelectField
+                            id="destinatario"
+                            v-model="form.cliente_destinatario_id"
+                            label="Destinatario"
+                            placeholder="Selecciona un cliente"
+                            :groups="gruposClientes"
+                            required
+                            :error="form.errors.cliente_destinatario_id"
+                        />
                     </div>
-                </section>
+                </FormSection>
 
-                <!-- 2. Información de origen y entrega -->
-                <section
-                    class="rounded-xl border border-sidebar-border/70 bg-card p-5"
-                    aria-labelledby="ruta-titulo"
+                <!-- 2. Origen y destino -->
+                <FormSection
+                    :step="2"
+                    title="Origen y destino"
+                    description="Define de dónde sale y a dónde se entrega."
                 >
-                    <h2
-                        id="ruta-titulo"
-                        class="mb-4 flex items-center gap-2 text-base font-medium text-foreground"
-                    >
-                        <span
-                            class="flex h-6 w-6 items-center justify-center rounded-full text-xs text-white"
-                            :style="{ backgroundColor: colors.azulClaro }"
-                        >
-                            2
-                        </span>
-                        Origen y destino
-                    </h2>
-
-                    <div class="grid gap-4 sm:grid-cols-2">
-                        <div>
-                            <label for="origen" :class="labelClase">
-                                Sucursal de origen *
-                            </label>
-                            <select
-                                id="origen"
-                                v-model="form.sucursal_origen_id"
-                                required
-                                :class="inputClase"
-                                :aria-invalid="!!form.errors.sucursal_origen_id"
-                            >
-                                <option :value="null" disabled>
-                                    Selecciona una sucursal
-                                </option>
-                                <option
-                                    v-for="s in sucursales"
-                                    :key="s.id"
-                                    :value="s.id"
-                                >
-                                    {{ s.nombre }}
-                                </option>
-                            </select>
-                            <p
-                                v-if="form.errors.sucursal_origen_id"
-                                class="mt-1 text-xs"
-                                :style="{ color: colors.rojo }"
-                            >
-                                {{ form.errors.sucursal_origen_id }}
-                            </p>
-                        </div>
-
-                        <div>
-                            <label for="destino" :class="labelClase">
-                                Territorio de destino *
-                            </label>
-                            <select
-                                id="destino"
-                                v-model="form.territorio_destino_id"
-                                required
-                                :class="inputClase"
-                                :aria-invalid="
-                                    !!form.errors.territorio_destino_id
-                                "
-                            >
-                                <option :value="null" disabled>
-                                    Selecciona un territorio
-                                </option>
-                                <option
-                                    v-for="t in territorios"
-                                    :key="t.id"
-                                    :value="t.id"
-                                >
-                                    {{ t.nombre }}
-                                </option>
-                            </select>
-                            <p
-                                v-if="form.errors.territorio_destino_id"
-                                class="mt-1 text-xs"
-                                :style="{ color: colors.rojo }"
-                            >
-                                {{ form.errors.territorio_destino_id }}
-                            </p>
-                        </div>
-
-                        <div class="sm:col-span-2">
-                            <label for="direccion" :class="labelClase">
-                                Dirección de entrega *
-                            </label>
-                            <input
-                                id="direccion"
-                                v-model="form.direccion_destino"
-                                type="text"
-                                maxlength="255"
-                                required
-                                placeholder="Colonia, calle, número, referencia…"
-                                :class="inputClase"
-                                :aria-invalid="!!form.errors.direccion_destino"
-                            />
-                            <p
-                                v-if="form.errors.direccion_destino"
-                                class="mt-1 text-xs"
-                                :style="{ color: colors.rojo }"
-                            >
-                                {{ form.errors.direccion_destino }}
-                            </p>
-                        </div>
+                    <div class="grid gap-5 sm:grid-cols-2">
+                        <SelectField
+                            id="origen"
+                            v-model="form.sucursal_origen_id"
+                            label="Sucursal de origen"
+                            placeholder="Selecciona una sucursal"
+                            :options="sucursales"
+                            required
+                            :error="form.errors.sucursal_origen_id"
+                        />
+                        <SelectField
+                            id="destino"
+                            v-model="form.territorio_destino_id"
+                            label="Territorio de destino"
+                            placeholder="Selecciona un territorio"
+                            :options="territorios"
+                            required
+                            :error="form.errors.territorio_destino_id"
+                        />
+                        <InputField
+                            id="direccion"
+                            v-model="form.direccion_destino"
+                            class="sm:col-span-2"
+                            label="Dirección de entrega"
+                            maxlength="255"
+                            placeholder="Colonia, calle, número, referencia…"
+                            required
+                            :error="form.errors.direccion_destino"
+                        />
                     </div>
-                </section>
+                </FormSection>
 
-                <!-- 3. Características y prioridad del paquete -->
-                <section
-                    class="rounded-xl border border-sidebar-border/70 bg-card p-5"
-                    aria-labelledby="paquete-titulo"
+                <!-- 3. Paquete -->
+                <FormSection
+                    :step="3"
+                    title="Paquete"
+                    description="Características físicas y prioridad del envío."
                 >
-                    <h2
-                        id="paquete-titulo"
-                        class="mb-4 flex items-center gap-2 text-base font-medium text-foreground"
-                    >
-                        <span
-                            class="flex h-6 w-6 items-center justify-center rounded-full text-xs text-white"
-                            :style="{ backgroundColor: colors.azulClaro }"
-                        >
-                            3
-                        </span>
-                        Paquete
-                    </h2>
-
-                    <div class="grid gap-4 sm:grid-cols-2">
-                        <div>
-                            <label for="peso" :class="labelClase">
-                                Peso (kg) *
-                            </label>
-                            <input
-                                id="peso"
-                                v-model.number="form.peso_kg"
-                                type="number"
-                                min="0.01"
-                                step="0.01"
-                                required
-                                placeholder="0.00"
-                                :class="inputClase"
-                                :aria-invalid="!!form.errors.peso_kg"
-                            />
-                            <p
-                                v-if="form.errors.peso_kg"
-                                class="mt-1 text-xs"
-                                :style="{ color: colors.rojo }"
-                            >
-                                {{ form.errors.peso_kg }}
-                            </p>
-                        </div>
-
-                        <div>
-                            <label for="volumen" :class="labelClase">
-                                Volumen (m³)
-                                <span class="font-normal">· opcional</span>
-                            </label>
-                            <input
-                                id="volumen"
-                                v-model.number="form.volumen_m3"
-                                type="number"
-                                min="0.01"
-                                step="0.01"
-                                placeholder="0.00"
-                                :class="inputClase"
-                                :aria-invalid="!!form.errors.volumen_m3"
-                            />
-                            <p
-                                v-if="form.errors.volumen_m3"
-                                class="mt-1 text-xs"
-                                :style="{ color: colors.rojo }"
-                            >
-                                {{ form.errors.volumen_m3 }}
-                            </p>
-                        </div>
+                    <div class="grid gap-5 sm:grid-cols-2">
+                        <InputField
+                            id="peso"
+                            v-model="form.peso_kg"
+                            label="Peso"
+                            type="number"
+                            min="0.01"
+                            step="0.01"
+                            placeholder="0.00"
+                            suffix="kg"
+                            required
+                            :error="form.errors.peso_kg"
+                        />
+                        <InputField
+                            id="volumen"
+                            v-model="form.volumen_m3"
+                            label="Volumen"
+                            type="number"
+                            min="0.01"
+                            step="0.01"
+                            placeholder="0.00"
+                            suffix="m³"
+                            optional
+                            :error="form.errors.volumen_m3"
+                        />
 
                         <fieldset class="sm:col-span-2">
-                            <legend :class="labelClase">Prioridad *</legend>
+                            <legend
+                                class="mb-1.5 block text-sm font-medium text-slate-700"
+                            >
+                                Prioridad <span class="text-red-600">*</span>
+                            </legend>
 
                             <div class="grid grid-cols-3 gap-2">
                                 <button
@@ -548,11 +386,11 @@ const personas = computed(() =>
                                     :key="key"
                                     type="button"
                                     :aria-pressed="form.prioridad === key"
-                                    class="rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors"
+                                    class="rounded-md border px-3 py-2.5 text-sm font-medium shadow-sm transition-colors focus-visible:ring-2 focus-visible:ring-blue-600/30 focus-visible:outline-none"
                                     :class="
                                         form.prioridad === key
-                                            ? 'shadow-sm'
-                                            : 'border-sidebar-border/70 text-muted-foreground hover:bg-muted'
+                                            ? ''
+                                            : 'border-slate-300 bg-white text-slate-600 hover:bg-slate-50'
                                     "
                                     :style="
                                         form.prioridad === key
@@ -572,300 +410,141 @@ const personas = computed(() =>
                                     {{ prioridadInfo[key].label }}
                                     <span
                                         class="block text-[11px] font-normal opacity-80"
+                                        >{{ horasCompromiso[key] }} h</span
                                     >
-                                        {{ horasCompromiso[key] }} h
-                                    </span>
                                 </button>
                             </div>
                             <p
                                 v-if="form.errors.prioridad"
-                                class="mt-1 text-xs"
-                                :style="{ color: colors.rojo }"
+                                class="mt-1 text-xs text-red-600"
                             >
                                 {{ form.errors.prioridad }}
                             </p>
                         </fieldset>
                     </div>
-                </section>
+                </FormSection>
 
-                <!-- 4. Configuración de la fecha comprometida -->
-                <section
-                    class="rounded-xl border border-sidebar-border/70 bg-card p-5"
-                    aria-labelledby="compromiso-titulo"
+                <!-- 4. Compromiso de entrega -->
+                <FormSection
+                    :step="4"
+                    title="Compromiso de entrega"
+                    description="Fecha y hora límite para entregar el paquete."
                 >
-                    <h2
-                        id="compromiso-titulo"
-                        class="mb-4 flex items-center gap-2 text-base font-medium text-foreground"
-                    >
-                        <span
-                            class="flex h-6 w-6 items-center justify-center rounded-full text-xs text-white"
-                            :style="{ backgroundColor: colors.azulClaro }"
+                    <div class="grid gap-5 sm:grid-cols-2">
+                        <InputField
+                            id="compromiso"
+                            v-model="form.fecha_comprometida"
+                            label="Fecha y hora comprometida"
+                            type="datetime-local"
+                            :min="minimo"
+                            required
+                            :error="form.errors.fecha_comprometida"
+                            @input="manual = true"
                         >
-                            4
-                        </span>
-                        Compromiso de entrega
-                    </h2>
-
-                    <div class="grid gap-4 sm:grid-cols-2">
-                        <div>
-                            <label for="compromiso" :class="labelClase">
-                                Fecha y hora comprometida *
-                            </label>
-                            <input
-                                id="compromiso"
-                                v-model="form.fecha_comprometida"
-                                type="datetime-local"
-                                :min="minimo"
-                                required
-                                :class="inputClase"
-                                :aria-invalid="!!form.errors.fecha_comprometida"
-                                @input="manual = true"
-                            />
-                            <p
-                                v-if="form.errors.fecha_comprometida"
-                                class="mt-1 text-xs"
-                                :style="{ color: colors.rojo }"
-                            >
-                                {{ form.errors.fecha_comprometida }}
-                            </p>
-                        </div>
-
-                        <div class="flex items-end">
-                            <p class="text-xs text-muted-foreground">
+                            <template #hint>
                                 Plazo sugerido según la prioridad ({{
                                     horasCompromiso[form.prioridad]
                                 }}
                                 h).
-
                                 <button
                                     v-if="manual"
                                     type="button"
-                                    class="ml-1 underline"
-                                    :style="{ color: colors.azulClaro }"
+                                    class="ml-1 font-medium text-blue-700 hover:underline"
                                     @click="usarSugerida"
                                 >
                                     Restablecer sugerida
                                 </button>
-                            </p>
-                        </div>
+                            </template>
+                        </InputField>
                     </div>
-                </section>
+                </FormSection>
             </div>
 
-            <!-- Resumen dinámico y avance del formulario -->
-            <aside class="lg:sticky lg:top-4">
-                <section
-                    class="rounded-md p-5 font-mono shadow-sm"
-                    :style="{
-                        backgroundColor: colors.papel,
-                        color: colors.azulOscuro,
-                    }"
-                    aria-label="Resumen del envío"
+            <!-- Panel lateral -->
+            <aside class="min-w-0 space-y-4 xl:sticky xl:top-6">
+                <SummaryPanel
+                    title="Resumen del envío"
+                    subtitle="Vista previa del registro"
                 >
-                    <div
-                        class="flex items-center justify-between border-b-2 border-dashed pb-3"
-                        :style="{ borderColor: colors.grisMedio }"
-                    >
-                        <span
-                            class="flex items-center gap-1.5 text-sm font-bold uppercase"
-                        >
-                            <Truck
-                                class="h-4 w-4"
-                                :style="{ color: colors.naranjaClaro }"
-                                aria-hidden="true"
-                            />
-                            Guía de envío
-                        </span>
-                        <span
-                            class="text-[10px]"
-                            :style="{ color: colors.grisPizarra }"
-                        >
-                            PK-······
-                        </span>
-                    </div>
+                    <template #icon
+                        ><Truck class="h-5 w-5 text-blue-300"
+                    /></template>
 
-                    <dl class="mt-4 space-y-3 text-xs">
-                        <div>
-                            <dt :style="{ color: colors.grisPizarra }">
-                                REMITENTE → DESTINATARIO
-                            </dt>
-                            <dd class="mt-0.5 text-sm font-bold">
-                                {{ resumen.remitente ?? '—' }} →
-                                {{ resumen.destinatario ?? '—' }}
-                            </dd>
-                        </div>
+                    <SummaryGroup label="Clientes">
+                        <dl class="space-y-3">
+                            <SummaryItem label="Remitente">{{
+                                remitente ?? 'Sin asignar'
+                            }}</SummaryItem>
+                            <SummaryItem label="Destinatario">{{
+                                destinatario ?? 'Sin asignar'
+                            }}</SummaryItem>
+                        </dl>
+                    </SummaryGroup>
 
-                        <div>
-                            <dt :style="{ color: colors.grisPizarra }">RUTA</dt>
-                            <dd class="mt-0.5 text-sm font-bold">
-                                {{ resumen.origen ?? '—' }} →
-                                {{ resumen.destino ?? '—' }}
-                            </dd>
-                        </div>
+                    <SummaryGroup label="Ruta">
+                        <dl class="space-y-3">
+                            <SummaryItem label="Origen">{{
+                                origen ?? 'Sin asignar'
+                            }}</SummaryItem>
+                            <SummaryItem label="Destino">{{
+                                destino ?? 'Sin asignar'
+                            }}</SummaryItem>
+                        </dl>
+                    </SummaryGroup>
 
-                        <div class="flex justify-between gap-4">
-                            <div>
-                                <dt :style="{ color: colors.grisPizarra }">
-                                    PESO
-                                </dt>
-                                <dd class="mt-0.5 text-sm font-bold">
-                                    {{
-                                        form.peso_kg !== '' &&
-                                        Number(form.peso_kg) > 0
-                                            ? `${Number(form.peso_kg).toFixed(2)} kg`
-                                            : '—'
-                                    }}
-                                </dd>
-                            </div>
-
-                            <div>
-                                <dt :style="{ color: colors.grisPizarra }">
-                                    VOLUMEN
-                                </dt>
-                                <dd class="mt-0.5 text-sm font-bold">
-                                    {{
-                                        form.volumen_m3 !== '' &&
-                                        Number(form.volumen_m3) > 0
-                                            ? `${Number(form.volumen_m3).toFixed(2)} m³`
-                                            : '—'
-                                    }}
-                                </dd>
-                            </div>
-
-                            <div>
-                                <dt :style="{ color: colors.grisPizarra }">
-                                    PRIORIDAD
-                                </dt>
-                                <dd
-                                    class="mt-0.5 text-sm font-bold"
-                                    :style="{
-                                        color:
-                                            form.prioridad === 'URGENTE'
-                                                ? colors.naranjaClaro
-                                                : undefined,
-                                    }"
-                                >
-                                    {{
-                                        prioridadInfo[
-                                            form.prioridad
-                                        ].label.toUpperCase()
-                                    }}
-                                </dd>
-                            </div>
-                        </div>
-
-                        <div
-                            class="border-t-2 border-dashed pt-3"
-                            :style="{ borderColor: colors.grisMedio }"
-                        >
-                            <dt :style="{ color: colors.grisPizarra }">
-                                ENTREGA COMPROMETIDA
-                            </dt>
-                            <dd class="mt-0.5 text-sm font-bold">
-                                {{ resumen.compromisoTexto ?? '—' }}
-                            </dd>
-                            <dd :style="{ color: colors.grisPizarra }">
-                                {{ plazoTexto }}
-                            </dd>
-                        </div>
-                    </dl>
-
-                    <!-- Indica qué campos obligatorios faltan -->
-                    <div class="mt-5">
-                        <div
-                            class="mb-1.5 flex justify-between text-[11px]"
-                            :style="{ color: colors.grisPizarra }"
-                        >
-                            <span>CAMPOS OBLIGATORIOS</span>
-                            <span
-                                >{{ completados }}/{{ checklist.length }}</span
+                    <SummaryGroup label="Paquete">
+                        <dl class="grid grid-cols-3 gap-4">
+                            <SummaryItem label="Peso">{{
+                                pesoTexto
+                            }}</SummaryItem>
+                            <SummaryItem label="Volumen">{{
+                                volumenTexto
+                            }}</SummaryItem>
+                            <SummaryItem
+                                label="Prioridad"
+                                :value-class="
+                                    form.prioridad === 'URGENTE'
+                                        ? 'text-red-600'
+                                        : undefined
+                                "
                             >
-                        </div>
+                                {{ prioridadInfo[form.prioridad].label }}
+                            </SummaryItem>
+                        </dl>
+                    </SummaryGroup>
 
-                        <div
-                            class="h-1.5 overflow-hidden rounded-full bg-black/10"
-                        >
-                            <div
-                                class="h-full rounded-full transition-all"
-                                :style="{
-                                    width: `${(completados / checklist.length) * 100}%`,
-                                    backgroundColor: completo
-                                        ? colors.verde
-                                        : colors.azulClaro,
-                                }"
-                            />
-                        </div>
+                    <SummaryGroup label="Entrega comprometida">
+                        <p class="text-sm font-semibold text-slate-900">
+                            {{ compromisoTexto ?? '—' }}
+                        </p>
+                        <p class="mt-1 text-sm text-slate-500">
+                            {{ plazoTexto }}
+                        </p>
+                    </SummaryGroup>
 
-                        <ul class="mt-3 grid grid-cols-1 gap-1 text-[11px]">
-                            <li
-                                v-for="campo in checklist"
-                                :key="campo.label"
-                                class="flex items-center gap-1.5"
-                                :style="{
-                                    color: campo.ok
-                                        ? colors.verde
-                                        : colors.grisPizarra,
-                                }"
-                            >
-                                <CheckCircle2
-                                    v-if="campo.ok"
-                                    class="h-3.5 w-3.5"
-                                    aria-hidden="true"
-                                />
-                                <span
-                                    v-else
-                                    class="h-3.5 w-3.5 rounded-full border"
-                                    :style="{ borderColor: colors.grisMedio }"
-                                    aria-hidden="true"
-                                />
-                                {{ campo.label }}
-                            </li>
-                        </ul>
-                    </div>
-                </section>
+                    <SummaryGroup
+                        ><ChecklistProgress
+                            title="Campos obligatorios"
+                            :items="checklist"
+                    /></SummaryGroup>
+                </SummaryPanel>
 
-                <!-- Advierte sobre posibles inconsistencias -->
-                <ul
-                    v-if="avisos.length"
-                    class="mt-3 flex flex-col gap-2"
-                    aria-label="Avisos del envío"
+                <ObservacionesPanel
+                    title="Observaciones del envío"
+                    :avisos="avisos"
+                />
+
+                <FormActions
+                    submit-label="Registrar envío"
+                    processing-label="Registrando envío..."
+                    :processing="form.processing"
+                    :disabled="!completo"
+                    cancel-href="/envios"
+                    hint="Verifica los datos y el plazo de entrega antes de confirmar."
                 >
-                    <li
-                        v-for="aviso in avisos"
-                        :key="aviso"
-                        class="flex items-start gap-2 rounded-lg px-3 py-2.5 text-xs text-foreground"
-                        :style="{ backgroundColor: soft(colors.amarillo) }"
-                    >
-                        <AlertTriangle
-                            class="mt-0.5 h-4 w-4 shrink-0"
-                            :style="{ color: colors.amarillo }"
-                            aria-hidden="true"
-                        />
-                        {{ aviso }}
-                    </li>
-                </ul>
-
-                <!-- Acciones del formulario -->
-                <div class="mt-4 flex gap-2">
-                    <button
-                        type="submit"
-                        class="flex-1 rounded-lg px-4 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-                        :style="{ backgroundColor: colors.azulClaro }"
-                        :disabled="!completo || form.processing"
-                    >
-                        {{
-                            form.processing ? 'Registrando…' : 'Registrar envío'
-                        }}
-                    </button>
-
-                    <Link
-                        href="/envios"
-                        class="rounded-lg border border-sidebar-border/70 bg-card px-4 py-2.5 text-sm font-medium text-foreground hover:bg-muted"
-                    >
-                        Cancelar
-                    </Link>
-                </div>
+                    <template #icon><Truck class="h-4 w-4" /></template>
+                </FormActions>
             </aside>
         </form>
-    </div>
+    </FormPage>
 </template>
