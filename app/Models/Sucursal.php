@@ -36,6 +36,9 @@ class Sucursal extends Model
     }
 
     // ubicacion es columna GENERATED geography(Point,4326) derivada de latitud/longitud: se expone calculada y nunca se escribe
+    /**
+     * @return array{latitud: float, longitud: float}|null
+     */
     public function getUbicacionAttribute(): ?array
     {
         if ($this->latitud === null || $this->longitud === null) {

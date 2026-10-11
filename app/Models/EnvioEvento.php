@@ -41,6 +41,9 @@ class EnvioEvento extends Model
         return $this->belongsTo(EstadoEnvio::class, 'estado_envio_id', 'id_estado');
     }
 
+    /**
+     * @param  Builder<EnvioEvento>  $query
+     */
     public function scopeCronologico(Builder $query): void
     {
         $query->orderBy('ocurrido_en')->orderBy('id_evento');

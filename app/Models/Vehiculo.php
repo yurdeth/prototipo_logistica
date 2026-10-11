@@ -52,6 +52,9 @@ class Vehiculo extends Model
         return $this->belongsTo(Sucursal::class, 'sucursal_id', 'id_sucursal');
     }
 
+    /**
+     * @param  Builder<Vehiculo>  $query
+     */
     public function scopeActivos(Builder $query): void
     {
         $query->whereHas('estado', fn (Builder $q) => $q->where('nombre_estado', 'DISPONIBLE'));

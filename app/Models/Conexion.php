@@ -38,6 +38,9 @@ class Conexion extends Model
         return $this->belongsTo(Sucursal::class, 'destino_sucursal_id', 'id_sucursal');
     }
 
+    /**
+     * @param  Builder<Conexion>  $query
+     */
     public function scopeActivas(Builder $query): void
     {
         $query->where('activa', true);

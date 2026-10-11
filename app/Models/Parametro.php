@@ -25,6 +25,8 @@ class Parametro extends Model
 
     /**
      * Última versión vigente de un parámetro por su clave.
+     *
+     * @param  Builder<Parametro>  $query
      */
     public function scopeVigente(Builder $query, string $clave): void
     {
