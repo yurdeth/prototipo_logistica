@@ -68,9 +68,9 @@ const soft = (hex: string, alpha = '1A') => `${hex}${alpha}`;
                 :style="
                     tab === item.key
                         ? {
-                            backgroundColor: colors.azulClaro,
-                            borderColor: colors.azulClaro,
-                        }
+                              backgroundColor: colors.azulClaro,
+                              borderColor: colors.azulClaro,
+                          }
                         : undefined
                 "
                 @click="tab = item.key"
@@ -217,13 +217,14 @@ const soft = (hex: string, alpha = '1A') => `${hex}${alpha}`;
                         <span
                             class="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-xs font-semibold"
                             :style="{
-                                color: index === flowSteps.length - 1
-                                    ? colors.naranjaClaro
-                                    : colors.azulClaro,
+                                color:
+                                    index === flowSteps.length - 1
+                                        ? colors.naranjaClaro
+                                        : colors.azulClaro,
                                 backgroundColor: soft(
                                     index === flowSteps.length - 1
                                         ? colors.naranjaClaro
-                                        : colors.azulClaro
+                                        : colors.azulClaro,
                                 ),
                             }"
                         >
@@ -234,7 +235,6 @@ const soft = (hex: string, alpha = '1A') => `${hex}${alpha}`;
                     </div>
                 </div>
             </div>
-
         </div>
 
         <!-- Dos columnas: pedidos y estado -->
