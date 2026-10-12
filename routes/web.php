@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Envios\EnvioController;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'Welcome')->name('home');
@@ -10,14 +11,29 @@ Route::redirect('email/verify/{any?}', '/dashboard')->where('any', '.*');
 Route::middleware(['auth'])->group(function () {
     Route::inertia('dashboard', 'Dashboard')->name('dashboard');
 
+    //  Envíos (controlador )
+    Route::prefix('envios')->name('envios.')->group(function () {
+        Route::get('/', [EnvioController::class, 'index'])->name('index');
+        Route::get('exportar', [EnvioController::class, 'exportar'])->name('exportar');
+
+        Route::middleware('can:envios.registrar')->group(function () {
+            Route::get('crear', [EnvioController::class, 'create'])->name('create');
+            Route::post('/', [EnvioController::class, 'store'])->name('store');
+        });
+
+        Route::middleware('can:envios.editar')->group(function () {
+            Route::get('{envio}/editar', [EnvioController::class, 'edit'])->whereNumber('envio')->name('edit');
+            Route::put('{envio}', [EnvioController::class, 'update'])->whereNumber('envio')->name('update');
+        });
+
+        Route::get('{envio}', [EnvioController::class, 'show'])->whereNumber('envio')->name('show');
+    });
+
     /*  Rutas provisionales para diseño de interfaces
         --------------------------------------------------------------------------
         Estas rutas se definen temporalmente mediante Route::inertia()
         para visualizar y desarrollar las interfaces del sistema.
-        Por el momento, se utilizan únicamente con fines de diseño
     */
-    Route::inertia('envios', 'shipments/EnviosIndex')->name('envios');
-    Route::inertia('envios/crear', 'shipments/EnviosCreate')->name('envios.create');
     Route::inertia('rutas', 'rutas/RutasIndex')->name('rutas');
     Route::inertia('rutas/crear', 'rutas/RutasCreate')->name('rutas.create');
 

@@ -1,28 +1,17 @@
 <script setup lang="ts">
-import { computed, ref, toValue } from 'vue';
-import { Head } from '@inertiajs/vue3';
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import { Head, router } from '@inertiajs/vue3';
 import { colors } from '@/UI/Colors';
 import { dashboard } from '@/routes';
 
-// Configuración de estados, prioridades, SLA y datos de prueba.
 import {
     estadoInfo,
     prioridadInfo,
     slaInfo,
-    generarEnviosDemo,
     type Envio,
 } from '@/config/Envios/envios';
+import { getSla, fmtFecha, fmtDuracion } from '@/composables/useEnviosBI';
 
-// Lógica de negocio de Envíos.
-import {
-    useEnviosBI,
-    getSla,
-    fmtFecha,
-    fmtDuracion,
-    type SortKey,
-} from '@/composables/useEnviosBI';
-
-// Componentes BI reutilizables.
 import EncabezadoAcciones from '@/components/bi/BiHeader.vue';
 import StatCards from '@/components/bi/StatCards.vue';
 import BiFilters from '@/components/bi/BiFilters.vue';
@@ -34,23 +23,81 @@ import BiTabs from '@/components/bi/BiTabs.vue';
 import BiPanelHead from '@/components/bi/BiPanelHead.vue';
 import BiLegend from '@/components/bi/BiLegend.vue';
 import BiBarList from '@/components/bi/BiBarList.vue';
-import BiDrawer from '@/components/bi/DetailPanel.vue';
-import BiStateBox from '@/components/bi/BiStateBox.vue';
-import BiFields from '@/components/bi/DetailFields.vue';
-import BiTimeline from '@/components/bi/BiTimeline.vue';
 import BiBadge from '@/components/bi/BiBadge.vue';
 import BiStatus from '@/components/bi/BiStatus.vue';
 
-// Tipos compartidos.
 import type {
     Activo,
     BarRow,
     Chip,
     Columna,
-    Field,
     Stat,
-    TimelineItem,
 } from '@/components/bi/Utils';
+
+/* ───────── Tipos de lo que envía EnvioController@index ───────── */
+type Estado = Envio['estado'];
+type Prioridad = Envio['prioridad'];
+
+interface FilaEnvio {
+    id_envio: number;
+    codigo_guia: string;
+    remitente: string;
+    destinatario: string;
+    territorio_destino: string;
+    estado: Estado;
+    prioridad: Prioridad;
+    peso_kg: number;
+    fecha_registro: string;
+    fecha_comprometida: string;
+    fecha_entrega: string | null;
+}
+
+interface Paginado<T> {
+    data: T[];
+    current_page: number;
+    last_page: number;
+    total: number;
+}
+
+interface Filtros {
+    q: string | null;
+    estado: Estado | null;
+    sucursal: number | null;
+    prioridad: Prioridad | null;
+    destino: number | null;
+    desde: string | null;
+    hasta: string | null;
+    alerta: boolean;
+}
+
+interface Resumen {
+    kpis: {
+        total: number;
+        peso_total: number;
+        cerrados: number;
+        a_tiempo: number;
+        vencidos: number;
+        en_riesgo: number;
+        horas_promedio: number | null;
+        fallos: number;
+    };
+    embudo: { estado: Estado; total: number }[];
+    prioridad: { prioridad: Prioridad; total: number; criticos: number }[];
+    destinos: { id: number; destino: string; total: number; incidencias: number }[];
+    tendencia: { label: string; total: number; incidencias: number }[];
+}
+
+const props = defineProps<{
+    envios: Paginado<FilaEnvio>;
+    filtros: Filtros;
+    catalogos: {
+        estados: string[];
+        sucursales: { id: number; nombre: string }[];
+        territorios: { id: number; nombre: string }[];
+    };
+    resumen: Resumen;
+    permisos: { registrar: boolean; editar: boolean };
+}>();
 
 defineOptions({
     layout: {
@@ -61,62 +108,173 @@ defineOptions({
     },
 });
 
-// Si Laravel no envía datos, se utilizan los de demostración.
-const props = withDefaults(defineProps<{ envios?: Envio[] }>(), {
-    envios: () => generarEnviosDemo(),
+/* ───────── Consulta al servidor ───────── */
+// Estado local de los filtros; se inicializa con lo que Laravel ya aplicó.
+const f = reactive<Filtros>({ ...props.filtros });
+const busqueda = ref(props.filtros.q ?? '');
+const periodo = ref(0);
+
+// Solo se envían los filtros que tienen valor, para mantener la URL limpia.
+const parametros = (): Record<string, string | number> => {
+    const params: Record<string, string | number> = {};
+
+    if (busqueda.value.trim()) params.q = busqueda.value.trim();
+    if (f.estado) params.estado = f.estado;
+    if (f.sucursal) params.sucursal = f.sucursal;
+    if (f.prioridad) params.prioridad = f.prioridad;
+    if (f.destino) params.destino = f.destino;
+    if (f.desde) params.desde = f.desde;
+    if (f.hasta) params.hasta = f.hasta;
+    if (f.alerta) params.alerta = 1;
+
+    return params;
+};
+
+const consultar = (pagina = 1) => {
+    const params = parametros();
+    if (pagina > 1) params.page = pagina;
+
+    router.get('/envios', params, {
+        preserveState: true,
+        preserveScroll: true,
+        replace: true,
+    });
+};
+
+// Descarga un CSV con TODOS los envíos que cumplen los filtros actuales (no solo la página).
+const exportar = () => {
+    const qs = new URLSearchParams(
+        Object.entries(parametros()).map(([k, v]) => [k, String(v)]),
+    ).toString();
+
+    window.location.href = `/envios/exportar${qs ? `?${qs}` : ''}`;
+};
+
+// La búsqueda espera a que se deje de escribir para no consultar en cada tecla.
+let temporizador: ReturnType<typeof setTimeout> | undefined;
+const alBuscar = (valor: string) => {
+    busqueda.value = valor;
+    clearTimeout(temporizador);
+    temporizador = setTimeout(() => consultar(), 350);
+};
+
+const aFecha = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+const cambiarPeriodo = (dias: number) => {
+    periodo.value = dias;
+    f.hasta = null;
+    f.desde = dias ? aFecha(new Date(Date.now() - dias * 86_400_000)) : null;
+    consultar();
+};
+
+const cambiarRango = (campo: 'desde' | 'hasta', valor: string) => {
+    f[campo] = valor || null;
+    periodo.value = 0;
+    consultar();
+};
+
+const alAlerta = (v: boolean) => {
+    f.alerta = v;
+    consultar();
+};
+
+const alEstado = (k: string) => {
+    f.estado = f.estado === k ? null : (k as Estado);
+    consultar();
+};
+
+const alPrioridad = (k: string) => {
+    f.prioridad = f.prioridad === k ? null : (k as Prioridad);
+    consultar();
+};
+
+const alDestino = (k: string | number) => {
+    const id = Number(k);
+    f.destino = f.destino === id ? null : id;
+    consultar();
+};
+
+const alSucursal = (e: Event) => {
+    const v = (e.target as HTMLSelectElement).value;
+    f.sucursal = v ? Number(v) : null;
+    consultar();
+};
+
+const page = computed({
+    get: () => props.envios.current_page,
+    set: (n: number) => consultar(n),
 });
 
-// Datos, filtros, métricas, ordenamiento y paginación.
-const {
-    now,
-    filtros,
-    sort,
-    page,
-    filtrados,
-    kpis,
-    embudo,
-    tendencia,
-    porPrioridad,
-    topDestinos,
-    pagina,
-    totalPaginas,
-    ordenarPor,
-    toggleEstado,
-    togglePrioridad,
-    toggleDestino,
-    hayFiltros,
-    limpiar,
-    exportarCsv,
-} = useEnviosBI(computed(() => props.envios));
+const hayFiltros = computed(
+    () =>
+        !!(
+            busqueda.value ||
+            f.estado ||
+            f.sucursal ||
+            f.prioridad ||
+            f.destino ||
+            f.desde ||
+            f.hasta ||
+            f.alerta
+        ),
+);
 
-// ── Tarjetas de resumen ──
-const resumen = computed<Stat[]>(() => [
+const limpiar = () => {
+    clearTimeout(temporizador);
+    busqueda.value = '';
+    periodo.value = 0;
+    Object.assign(f, {
+        q: null,
+        estado: null,
+        sucursal: null,
+        prioridad: null,
+        destino: null,
+        desde: null,
+        hasta: null,
+        alerta: false,
+    });
+    consultar();
+};
+
+/* ───────── Reloj para el SLA ───────── */
+const now = ref(Date.now());
+let reloj: ReturnType<typeof setInterval> | undefined;
+onMounted(() => (reloj = setInterval(() => (now.value = Date.now()), 60_000)));
+onBeforeUnmount(() => {
+    clearInterval(reloj);
+    clearTimeout(temporizador);
+});
+
+// getSla trabaja con la forma del envío; la fila del servidor trae los campos que usa.
+const slaDe = (e: FilaEnvio) => getSla(e as unknown as Envio, now.value);
+const esAlerta = (sla: string) => ['vencido', 'en_riesgo'].includes(sla);
+
+/* ───────── Tarjetas de resumen (todo el conjunto filtrado) ───────── */
+const k = computed(() => props.resumen.kpis);
+
+const tarjetas = computed<Stat[]>(() => [
     {
         label: 'Envíos',
-        value: kpis.value.total,
-        hint: `${kpis.value.pesoTotal.toLocaleString('es-SV', { maximumFractionDigits: 0 })} kg transportados`,
+        value: k.value.total,
+        hint: `${k.value.peso_total.toLocaleString('es-SV', { maximumFractionDigits: 0 })} kg transportados`,
     },
     {
         label: 'Cumplimiento de entrega',
-        value:
-            kpis.value.cumplimiento === null
-                ? '—'
-                : `${kpis.value.cumplimiento.toFixed(1)}%`,
-        hint: `${kpis.value.aTiempo} de ${kpis.value.cerrados} cerrados a tiempo`,
+        value: k.value.cerrados
+            ? `${((k.value.a_tiempo / k.value.cerrados) * 100).toFixed(1)}%`
+            : '—',
+        hint: `${k.value.a_tiempo} de ${k.value.cerrados} cerrados a tiempo`,
     },
     {
         label: 'Requieren atención',
-        value: kpis.value.enRiesgo + kpis.value.vencidos,
-        hint: `${kpis.value.vencidos} vencidos y ${kpis.value.enRiesgo} por vencer en 24h`,
-        color: kpis.value.vencidos > 0 ? colors.rojo : undefined,
+        value: k.value.en_riesgo + k.value.vencidos,
+        hint: `${k.value.vencidos} vencidos y ${k.value.en_riesgo} por vencer en 24h`,
+        color: k.value.vencidos > 0 ? colors.rojo : undefined,
     },
 ]);
 
-// Clasificación de alertas SLA.
-const SLA_ALERTA = ['vencido', 'en_riesgo'];
-const esAlerta = (sla: string) => SLA_ALERTA.includes(sla);
-
-// ── Filtros ──
+/* ───────── Filtros visibles ───────── */
 const periodos = [
     { value: 7, label: 'Últimos 7 días' },
     { value: 30, label: 'Últimos 30 días' },
@@ -124,62 +282,62 @@ const periodos = [
     { value: 0, label: 'Todo el historial' },
 ] as const;
 
-// Filtros por estado con su total.
 const chips = computed<Chip[]>(() =>
-    toValue(embudo).map((f) => ({
-        key: f.estado,
-        label: estadoInfo[f.estado].label,
-        count: f.total,
-        color: estadoInfo[f.estado].color,
+    props.resumen.embudo.map((e) => ({
+        key: e.estado,
+        label: estadoInfo[e.estado].label,
+        count: e.total,
+        color: estadoInfo[e.estado].color,
     })),
 );
-const alEstado = (k: string) => toggleEstado(k as Envio['estado']);
-const alPrioridad = (k: string) => togglePrioridad(k as Envio['prioridad']);
 
-// Filtros activos que se muestran en BiFilters.
-const activos = computed<Activo[]>(() => [
-    ...(filtros.estado
-        ? [
-              {
-                  key: 'estado',
-                  label: `Estado: ${estadoInfo[filtros.estado].label}`,
-              },
-          ]
-        : []),
-    ...(filtros.prioridad
-        ? [
-              {
-                  key: 'prioridad',
-                  label: `Prioridad: ${prioridadInfo[filtros.prioridad].label}`,
-              },
-          ]
-        : []),
-    ...(filtros.destino
-        ? [{ key: 'destino', label: `Destino: ${filtros.destino}` }]
-        : []),
-    ...(filtros.soloRiesgo
-        ? [{ key: 'soloRiesgo', label: 'Solo con alerta' }]
-        : []),
-]);
+const activos = computed<Activo[]>(() => {
+    const lista: Activo[] = [];
+
+    if (f.estado) lista.push({ key: 'estado', label: `Estado: ${estadoInfo[f.estado].label}` });
+    if (f.prioridad) lista.push({ key: 'prioridad', label: `Prioridad: ${prioridadInfo[f.prioridad].label}` });
+    if (f.destino) {
+        const t = props.catalogos.territorios.find((x) => x.id === f.destino);
+        lista.push({ key: 'destino', label: `Destino: ${t?.nombre ?? f.destino}` });
+    }
+    if (f.sucursal) {
+        const s = props.catalogos.sucursales.find((x) => x.id === f.sucursal);
+        lista.push({ key: 'sucursal', label: `Sucursal: ${s?.nombre ?? f.sucursal}` });
+    }
+    if (f.desde || f.hasta) {
+        lista.push({ key: 'fechas', label: `Fechas: ${f.desde ?? '…'} a ${f.hasta ?? '…'}` });
+    }
+    if (f.alerta) lista.push({ key: 'alerta', label: 'Solo con alerta' });
+
+    return lista;
+});
 
 const quitarFiltro = (key: string) => {
-    if (key === 'estado') filtros.estado = null;
-    if (key === 'prioridad') filtros.prioridad = null;
-    if (key === 'destino') filtros.destino = null;
-    if (key === 'soloRiesgo') filtros.soloRiesgo = false;
+    if (key === 'estado') f.estado = null;
+    if (key === 'prioridad') f.prioridad = null;
+    if (key === 'destino') f.destino = null;
+    if (key === 'sucursal') f.sucursal = null;
+    if (key === 'alerta') f.alerta = false;
+    if (key === 'fechas') {
+        f.desde = null;
+        f.hasta = null;
+        periodo.value = 0;
+    }
+    consultar();
 };
 
-// ── Tabla ──
+/* ───────── Tabla ───────── */
 const columnas: Columna[] = [
     { label: 'Envío' },
     { label: 'Destino' },
     { label: 'Estado' },
-    { key: 'fecha_comprometida', label: 'Compromiso' },
+    { label: 'Compromiso' },
     { label: 'Situación' },
 ];
-const ordenar = (k: string) => ordenarPor(k as SortKey);
 
-// ── Análisis en pestañas ──
+const abrir = (e: FilaEnvio) => router.visit(`/envios/${e.id_envio}`);
+
+/* ───────── Análisis en pestañas ───────── */
 const tab = ref('tendencia');
 const tabs = [
     { key: 'tendencia', label: 'Registros por día' },
@@ -192,132 +350,145 @@ const leyendaTendencia = [
     { label: 'Con incidencia', color: colors.rojo },
 ];
 
-const filasPrioridad = computed<BarRow[]>(() =>
-    toValue(porPrioridad).map((p) => ({
+const maxDia = computed(() => Math.max(1, ...props.resumen.tendencia.map((d) => d.total)));
+
+const filasPrioridad = computed<BarRow[]>(() => {
+    const suma = props.resumen.prioridad.reduce((a, p) => a + p.total, 0) || 1;
+
+    return props.resumen.prioridad.map((p) => ({
         key: p.prioridad,
         label: prioridadInfo[p.prioridad].label,
         dot: prioridadInfo[p.prioridad].color,
         badge: p.criticos ? `${p.criticos} con alerta` : undefined,
         badgeColor: colors.rojo,
-        detail: `${p.total} (${p.porcentaje.toFixed(0)}%)`,
-    })),
-);
-
-const filasDestino = computed<BarRow[]>(() =>
-    toValue(topDestinos).map((d) => ({
-        key: d.destino,
-        label: d.destino,
-        width: d.ancho,
-        color: d.pctIncidencias >= 30 ? colors.rojo : colors.azulClaro,
-        detail: `${d.total} envíos`,
-        accent: `${d.pctIncidencias.toFixed(0)}% con incidencia`,
-        accentColor: d.pctIncidencias >= 30 ? colors.rojo : undefined,
-    })),
-);
-
-// ── Panel de detalle ──
-const seleccionado = ref<Envio | null>(null);
-
-const personas = (e: Envio): Field[] => [
-    { label: 'Remitente', value: e.remitente, weight: 'medium' },
-    { label: 'Destinatario', value: e.destinatario, weight: 'medium' },
-];
-
-const logistica = (e: Envio): Field[] => [
-    { label: 'Sucursal de origen', value: e.sucursal_origen },
-    { label: 'Destino', value: e.territorio_destino },
-    { label: 'Dirección de entrega', value: e.direccion_destino, wide: true },
-];
-
-const especificaciones = (e: Envio): Field[] => [
-    { label: 'Peso', value: `${e.peso_kg.toFixed(2)} kg`, weight: 'semibold' },
-    {
-        label: 'Volumen',
-        value: e.volumen_m3 ? `${e.volumen_m3} m³` : '—',
-        weight: 'semibold',
-    },
-    { label: 'Fecha de registro', value: fmtFecha(e.fecha_registro) },
-    { label: 'Fecha compromiso', value: fmtFecha(e.fecha_comprometida) },
-];
-
-const eventos = (e: Envio): TimelineItem[] =>
-    e.eventos.map((ev) => ({
-        key: ev.id_evento,
-        color: estadoInfo[ev.estado].color,
-        title: estadoInfo[ev.estado].label,
-        meta: fmtFecha(ev.ocurrido_en),
-        note: ev.nota || undefined,
+        detail: `${p.total} (${((p.total / suma) * 100).toFixed(0)}%)`,
     }));
+});
+
+const filasDestino = computed<BarRow[]>(() => {
+    const maximo = Math.max(1, ...props.resumen.destinos.map((d) => d.total));
+
+    return props.resumen.destinos.map((d) => {
+        const pct = d.total ? (d.incidencias / d.total) * 100 : 0;
+
+        return {
+            key: String(d.id),
+            label: d.destino,
+            width: (d.total / maximo) * 100,
+            color: pct >= 30 ? colors.rojo : colors.azulClaro,
+            detail: `${d.total} envíos`,
+            accent: `${pct.toFixed(0)}% con incidencia`,
+            accentColor: pct >= 30 ? colors.rojo : undefined,
+        };
+    });
+});
+
+const tasaFallo = computed(() => (k.value.total ? (k.value.fallos / k.value.total) * 100 : 0));
+
+const campoClase =
+    'h-10 rounded-lg border border-sidebar-border/70 bg-card px-3 text-sm text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none';
 </script>
 
 <template>
     <Head title="Envíos" />
 
     <div class="flex h-full flex-1 flex-col gap-4 overflow-x-auto p-4">
-        <!-- Encabezado -->
         <EncabezadoAcciones
             title="Envíos"
             subtitle="Seguimiento de entregas y cumplimiento de compromisos"
             accion="Nuevo envío"
             href="/envios/crear"
-            @exportar="exportarCsv"
+            @exportar="exportar"
         />
 
-        <!-- Sección de resumen con indicadores clave de los envíos. -->
-        <StatCards :items="resumen" :cols="3" />
+        <StatCards :items="tarjetas" :cols="3" />
 
-        <!-- Sección principal para consultar y administrar los envíos. -->
         <section
             class="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card shadow-sm"
             aria-label="Listado de envíos"
         >
-            <!-- Panel de búsqueda y filtros del listado. -->
             <BiFilters
-                v-model:busqueda="filtros.busqueda"
-                v-model:periodo="filtros.periodo"
-                v-model:solo-alertas="filtros.soloRiesgo"
-                placeholder="Buscar por guía, cliente o destino"
+                :busqueda="busqueda"
+                :periodo="periodo"
+                :solo-alertas="f.alerta"
+                placeholder="Buscar por guía, remitente o destinatario"
                 :periodos="periodos"
                 :activos="activos"
                 :hay-filtros="hayFiltros"
                 alerta-label="Solo con alerta"
+                @update:busqueda="alBuscar"
+                @update:periodo="cambiarPeriodo"
+                @update:solo-alertas="alAlerta"
                 @quitar="quitarFiltro"
                 @limpiar="limpiar"
             >
-                <BiChips
-                    :items="chips"
-                    :active="filtros.estado"
-                    @toggle="alEstado"
-                />
+                <!-- Misma fila que la búsqueda, el período y "Solo con alerta" -->
+                <template #extra>
+                    <select
+                        :class="[campoClase, 'w-full sm:w-auto']"
+                        aria-label="Sucursal de origen"
+                        :value="f.sucursal ?? ''"
+                        @change="alSucursal"
+                    >
+                        <option value="">Todas las sucursales</option>
+                        <option
+                            v-for="s in catalogos.sucursales"
+                            :key="s.id"
+                            :value="s.id"
+                        >
+                            {{ s.nombre }}
+                        </option>
+                    </select>
+
+                    <label
+                        class="flex items-center gap-2 text-sm text-muted-foreground"
+                    >
+                        Desde
+                        <input
+                            type="date"
+                            :class="campoClase"
+                            :value="f.desde ?? ''"
+                            @change="cambiarRango('desde', ($event.target as HTMLInputElement).value)"
+                        />
+                    </label>
+
+                    <label
+                        class="flex items-center gap-2 text-sm text-muted-foreground"
+                    >
+                        Hasta
+                        <input
+                            type="date"
+                            :class="campoClase"
+                            :value="f.hasta ?? ''"
+                            :min="f.desde ?? undefined"
+                            @change="cambiarRango('hasta', ($event.target as HTMLInputElement).value)"
+                        />
+                    </label>
+                </template>
+
+                <BiChips :items="chips" :active="f.estado" @toggle="alEstado" />
+
             </BiFilters>
 
-            <!-- Tabla con la información principal y el estado de cada envío. -->
             <BiTable
                 :columns="columnas"
-                :sort="sort"
-                :vacio="!pagina.length"
+                :vacio="!envios.data.length"
                 empty-title="No se encontraron envíos"
-                @sort="ordenar"
             >
                 <BiTableRow
-                    v-for="e in pagina"
+                    v-for="e in envios.data"
                     :key="e.id_envio"
-                    @select="seleccionado = e"
+                    @select="abrir(e)"
                 >
-                    <!-- Identificación del envío y alerta visual según el SLA. -->
                     <td
                         class="px-5 py-4"
                         :style="
-                            esAlerta(getSla(e, now))
-                                ? {
-                                      boxShadow: `inset 3px 0 0 ${slaInfo[getSla(e, now)].color}`,
-                                  }
+                            esAlerta(slaDe(e))
+                                ? { boxShadow: `inset 3px 0 0 ${slaInfo[slaDe(e)].color}` }
                                 : undefined
                         "
                     >
-                        <p
-                            class="font-mono text-sm font-medium text-foreground"
-                        >
+                        <p class="font-mono text-sm font-medium text-foreground">
                             {{ e.codigo_guia }}
                         </p>
                         <p class="mt-1 text-xs text-muted-foreground">
@@ -325,12 +496,10 @@ const eventos = (e: Envio): TimelineItem[] =>
                         </p>
                     </td>
 
-                    <!-- Destino registrado para el envío. -->
                     <td class="px-5 py-4 text-foreground">
                         {{ e.territorio_destino }}
                     </td>
 
-                    <!-- Estado actual identificado mediante un indicador de color. -->
                     <td class="px-5 py-4">
                         <BiStatus
                             class="text-foreground"
@@ -339,85 +508,73 @@ const eventos = (e: Envio): TimelineItem[] =>
                         />
                     </td>
 
-                    <!-- Fecha límite de entrega, con formato legible. -->
-                    <td
-                        class="px-5 py-4 whitespace-nowrap text-muted-foreground"
-                    >
+                    <td class="px-5 py-4 whitespace-nowrap text-muted-foreground">
                         {{ fmtFecha(e.fecha_comprometida) }}
                     </td>
 
-                    <!-- Situación del SLA para detectar retrasos y riesgos. -->
                     <td class="px-5 py-4">
                         <BiBadge
-                            v-if="esAlerta(getSla(e, now))"
-                            :color="slaInfo[getSla(e, now)].color"
-                            :label="slaInfo[getSla(e, now)].label"
+                            v-if="esAlerta(slaDe(e))"
+                            :color="slaInfo[slaDe(e)].color"
+                            :label="slaInfo[slaDe(e)].label"
                         />
                         <span
                             v-else
                             class="text-sm whitespace-nowrap text-muted-foreground"
-                            >{{ slaInfo[getSla(e, now)].label }}</span
+                            >{{ slaInfo[slaDe(e)].label }}</span
                         >
                     </td>
                 </BiTableRow>
             </BiTable>
 
-            <!-- Controles para navegar entre las páginas del listado. -->
             <BiPagination
                 v-model="page"
-                :total="totalPaginas"
-                :count="filtrados.length"
+                :total="Math.max(1, envios.last_page)"
+                :count="envios.total"
                 unit="envíos"
             />
         </section>
 
-        <!-- Sección de análisis estadístico con pestañas interactivas. -->
         <section
             class="rounded-xl border border-sidebar-border/70 bg-card p-4 shadow-sm sm:p-5"
             aria-label="Análisis"
         >
             <BiTabs v-model="tab" :tabs="tabs">
-                <!-- Indicadores complementarios de desempeño logístico. -->
                 <p class="text-sm leading-relaxed text-muted-foreground">
                     Entrega promedio
                     <span class="font-semibold text-foreground">{{
-                        fmtDuracion(kpis.tiempoPromedioH)
+                        fmtDuracion(k.horas_promedio)
                     }}</span
                     >, fallos o devoluciones
                     <span class="font-semibold text-foreground"
-                        >{{ kpis.tasaFallo.toFixed(1) }}%</span
+                        >{{ tasaFallo.toFixed(1) }}%</span
                     >
                 </p>
             </BiTabs>
 
-            <!-- Gráfico de tendencia diaria de envíos e incidencias. -->
             <div v-if="tab === 'tendencia'" class="pt-5">
                 <BiPanelHead title="Registros de los últimos 14 días">
                     <BiLegend :items="leyendaTendencia" />
                 </BiPanelHead>
 
-                <!-- Barras proporcionales al volumen diario de envíos. -->
                 <div
                     class="flex h-48 items-end justify-between gap-1.5 sm:gap-2"
                     role="img"
                     aria-label="Envíos registrados por día en los últimos 14 días"
                 >
                     <div
-                        v-for="(b, i) in tendencia.buckets"
+                        v-for="(b, i) in resumen.tendencia"
                         :key="b.label"
                         class="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-2"
                         :title="`${b.label}: ${b.total} envíos, ${b.incidencias} con incidencia`"
                     >
-                        <span
-                            class="text-xs font-medium text-muted-foreground"
-                            >{{ b.total || '' }}</span
-                        >
+                        <span class="text-xs font-medium text-muted-foreground">{{
+                            b.total || ''
+                        }}</span>
 
                         <div
                             class="flex w-full max-w-8 flex-col-reverse overflow-hidden rounded-t-md"
-                            :style="{
-                                height: `${(b.total / tendencia.max) * 80}%`,
-                            }"
+                            :style="{ height: `${(b.total / maxDia) * 80}%` }"
                         >
                             <div
                                 :style="{
@@ -442,7 +599,6 @@ const eventos = (e: Envio): TimelineItem[] =>
                 </div>
             </div>
 
-            <!-- Distribución de envíos según su nivel de prioridad. -->
             <div v-else-if="tab === 'prioridad'" class="pt-5">
                 <BiPanelHead
                     title="Envíos por prioridad"
@@ -450,12 +606,11 @@ const eventos = (e: Envio): TimelineItem[] =>
                 />
                 <BiBarList
                     :rows="filasPrioridad"
-                    :active="filtros.prioridad"
+                    :active="f.prioridad"
                     @select="alPrioridad"
                 />
             </div>
 
-            <!-- Comparación de destinos según volumen e incidencias. -->
             <div v-else class="pt-5">
                 <BiPanelHead
                     title="Rendimiento por destino"
@@ -463,66 +618,11 @@ const eventos = (e: Envio): TimelineItem[] =>
                 />
                 <BiBarList
                     :rows="filasDestino"
-                    :active="filtros.destino"
+                    :active="f.destino ? String(f.destino) : null"
                     empty="No hay datos disponibles con los filtros actuales."
-                    @select="toggleDestino"
+                    @select="alDestino"
                 />
             </div>
         </section>
-
-        <!-- Panel lateral con la información detallada del envío seleccionado. -->
-        <BiDrawer
-            v-if="seleccionado"
-            tipo="Detalle del envío"
-            :title="seleccionado.codigo_guia"
-            @close="seleccionado = null"
-        >
-            <!-- Estado, prioridad y situación actual del SLA. -->
-            <BiStateBox>
-                <BiStatus
-                    class="rounded-lg border border-sidebar-border/70 bg-card px-3 py-2 text-sm font-medium text-foreground"
-                    :color="estadoInfo[seleccionado.estado].color"
-                    :label="estadoInfo[seleccionado.estado].label"
-                />
-                <span
-                    class="rounded-lg border border-sidebar-border/70 bg-card px-3 py-2 text-sm text-foreground"
-                >
-                    Prioridad
-                    {{
-                        prioridadInfo[
-                            seleccionado.prioridad
-                        ].label.toLowerCase()
-                    }}
-                </span>
-                <BiBadge
-                    v-if="esAlerta(getSla(seleccionado, now))"
-                    size="md"
-                    :color="slaInfo[getSla(seleccionado, now)].color"
-                    :label="slaInfo[getSla(seleccionado, now)].label"
-                />
-            </BiStateBox>
-
-            <BiFields
-                title="Información general"
-                :fields="personas(seleccionado)"
-                responsive
-            />
-            <BiFields
-                title="Información logística"
-                :fields="logistica(seleccionado)"
-            />
-            <BiFields
-                title="Especificaciones y fechas"
-                :fields="especificaciones(seleccionado)"
-            />
-
-            <!-- Línea de tiempo con los cambios registrados en el envío. -->
-            <BiTimeline
-                title="Historial de seguimiento"
-                :badge="`${seleccionado.eventos.length} eventos`"
-                :items="eventos(seleccionado)"
-                empty="No hay eventos registrados para este envío."
-            />
-        </BiDrawer>
     </div>
 </template>
