@@ -12,21 +12,27 @@ class DatabaseSeeder extends Seeder
     use WithoutModelEvents;
 
     /**
-     * Seed the application's database.
+     * Orden garantizado: primero los catálogos (listas fijas que todo lo
+     * demás referencia), después los datos. Todos los seeders de catálogo
+     * son idempotentes (updateOrCreate/firstOrCreate): se puede re-ejecutar
+     * `php artisan db:seed` sin duplicar filas.
      */
     public function run(): void
     {
-        $this->call(AdminUserSeeder::class);
-
+        /* ── 1. Catálogos ── */
         $this->call(EstadoVehiculoSeeder::class);
         $this->call(TipoVehiculoSeeder::class);
         $this->call(MarcaVehiculoSeeder::class);
         $this->call(ModeloVehiculoSeeder::class);
-        $this->call(EnviosSeeder::class);
-
-        // los estados y tipos de incidencia ya se siembran en sus migraciones
-        // con insertOrIgnore; re-ejecutar db:seed no duplica nada
+        $this->call(EstadoEnvioSeeder::class);
+        $this->call(EstadoDespachoSeeder::class);
+        $this->call(TipoIncidenciaSeeder::class);
+        $this->call(RoleSeeder::class);
         $this->call(ParametroSeeder::class);
+
+        /* ── 2. Datos ── */
+        $this->call(AdminUserSeeder::class);
+        $this->call(EnviosSeeder::class);
 
         // User::factory(10)->create();
 
