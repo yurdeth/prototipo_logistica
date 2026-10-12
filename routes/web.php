@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Envios\EnvioController;
+use App\Http\Controllers\Flota\VehiculoController;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'Welcome')->name('home');
@@ -37,10 +38,16 @@ Route::middleware(['auth'])->group(function () {
     Route::inertia('rutas', 'rutas/RutasIndex')->name('rutas');
     Route::inertia('rutas/crear', 'rutas/RutasCreate')->name('rutas.create');
 
-    // Vistas del parque de vehículos; los endpoints están en routes/api.php
-    Route::inertia('vehiculos', 'flota/VehiculosIndex')->name('vehiculos.index');
-    Route::inertia('vehiculos/crear', 'flota/VehiculosCreate')->name('vehiculos.create');
-    Route::inertia('vehiculos/{vehiculo}/editar', 'flota/VehiculosEdit')->name('vehiculos.edit');
+    // Flota: vistas y operaciones (sin API; todo por Inertia)
+    Route::prefix('vehiculos')->name('vehiculos.')->group(function (): void {
+        Route::get('/', [VehiculoController::class, 'index'])->name('index');
+        Route::get('crear', [VehiculoController::class, 'create'])->name('create');
+        Route::post('/', [VehiculoController::class, 'store'])->name('store');
+        Route::get('{vehiculo}/editar', [VehiculoController::class, 'edit'])->whereNumber('vehiculo')->name('edit');
+        Route::put('{vehiculo}', [VehiculoController::class, 'update'])->whereNumber('vehiculo')->name('update');
+        Route::post('{vehiculo}/desactivar', [VehiculoController::class, 'desactivar'])->whereNumber('vehiculo')->name('desactivar');
+        Route::post('{vehiculo}/reactivar', [VehiculoController::class, 'reactivar'])->whereNumber('vehiculo')->name('reactivar');
+    });
 });
 
 require __DIR__.'/settings.php';

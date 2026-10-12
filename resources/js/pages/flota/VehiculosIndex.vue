@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, ref } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import { create as crearRuta, edit as editarRuta } from '@/routes/vehiculos';
 import { dashboard } from '@/routes';
@@ -10,7 +10,6 @@ import {
     vehiculosDemo,
     type Vehiculo,
 } from '@/config/Flota/vehiculos';
-import { apiJson } from '@/lib/api';
 import { fmtNumero } from '@/lib/formularios';
 import type { Activo, Chip, Columna, Stat } from '@/components/bi/Utils';
 
@@ -31,24 +30,12 @@ defineOptions({
     },
 });
 
-// Usa datos de demostración mientras el endpoint no responde.
+// La flota llega como prop desde el controlador; demo solo como respaldo.
 const props = withDefaults(defineProps<{ vehiculos?: Vehiculo[] }>(), {
     vehiculos: () => vehiculosDemo,
 });
 
-// Lista real desde la API; si falla, se mantienen los datos de demostración.
-const flota = ref<Vehiculo[]>(props.vehiculos);
-
-onMounted(async () => {
-    try {
-        const respuesta = await apiJson<{ vehiculos: Vehiculo[] }>(
-            '/api/vehiculos',
-        );
-        if (respuesta.vehiculos?.length) flota.value = respuesta.vehiculos;
-    } catch {
-        // Sin datos reales se conserva la demo.
-    }
-});
+const flota = computed<Vehiculo[]>(() => props.vehiculos);
 
 /* ───────── Filtros ───────── */
 const busqueda = ref('');

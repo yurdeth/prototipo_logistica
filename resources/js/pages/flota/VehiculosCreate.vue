@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { Truck } from '@/UI/Icons';
 import { dashboard } from '@/routes';
+import { store as guardarRuta } from '@/routes/vehiculos';
 import {
     estadosVehiculoDemo,
     FORMATO_PLACA,
@@ -17,7 +18,6 @@ import {
     type SucursalVehiculo,
     type TipoVehiculo,
 } from '@/config/Flota/vehiculos';
-import { apiJson, type ApiError } from '@/lib/api';
 import { esPositivo, fmtNumero, type Aviso } from '@/lib/formularios';
 import { useChecklist } from '@/composables/useChecklist';
 import FormPage from '@/components/Forms/FormPage.vue';
@@ -60,32 +60,12 @@ const props = withDefaults(
     },
 );
 
-/* ───────── Catálogos (reales cuando responde la API) ───────── */
+/* ───────── Catálogos (props del servidor; demo como respaldo) ───────── */
 const tipos = ref<TipoVehiculo[]>(props.tipos);
 const estados = ref<EstadoVehiculo[]>(props.estados);
 const sucursales = ref<SucursalVehiculo[]>(props.sucursales);
 const marcas = ref<MarcaVehiculoCatalogo[]>(props.marcas);
 const modelos = ref<ModeloVehiculoCatalogo[]>(props.modelos);
-
-onMounted(async () => {
-    try {
-        const respuesta = await apiJson<{
-            tipos: TipoVehiculo[];
-            estados: EstadoVehiculo[];
-            sucursales: SucursalVehiculo[];
-            marcas: MarcaVehiculoCatalogo[];
-            modelos: ModeloVehiculoCatalogo[];
-        }>('/api/vehiculos/opciones');
-        if (respuesta.tipos?.length) tipos.value = respuesta.tipos;
-        if (respuesta.estados?.length) estados.value = respuesta.estados;
-        if (respuesta.sucursales?.length)
-            sucursales.value = respuesta.sucursales;
-        if (respuesta.marcas?.length) marcas.value = respuesta.marcas;
-        if (respuesta.modelos?.length) modelos.value = respuesta.modelos;
-    } catch {
-        // Sin catálogos reales se conservan los de demo.
-    }
-});
 
 const opcionesTipo = computed(() =>
     tiposHabilitados.value.map((t) => ({
@@ -265,38 +245,16 @@ const avisos = computed<Aviso[]>(() => {
 });
 
 /* ───────── Envío ───────── */
-const enviando = ref(false);
+const enviando = computed(() => form.processing);
 
-const enviar = async () => {
+const enviar = () => {
     if (!completo.value || enviando.value) return;
 
-    enviando.value = true;
     form.clearErrors();
     form.placa = normalizarPlaca(form.placa);
-
-    try {
-        await apiJson('/api/vehiculos', { method: 'POST', body: form.data() });
-        router.visit('/vehiculos');
-    } catch (error) {
-        const apiError = error as ApiError;
-        // Errores de validación (422): se muestran junto a cada campo.
-        if (apiError.errors) {
-            const errores = Object.fromEntries(
-                Object.entries(apiError.errors).map(([campo, mensajes]) => [
-                    campo,
-                    mensajes[0],
-                ]),
-            );
-            form.setError(errores);
-        } else {
-            form.setError(
-                'placa',
-                'No se pudo registrar el vehículo. Intenta nuevamente.',
-            );
-        }
-    } finally {
-        enviando.value = false;
-    }
+    // Los errores de validación (422) llegan solos al form.errors de Inertia;
+    // el controlador redirige al listado cuando el registro sale bien.
+    form.post(guardarRuta().url);
 };
 </script>
 

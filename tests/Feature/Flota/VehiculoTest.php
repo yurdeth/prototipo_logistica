@@ -67,15 +67,15 @@ class VehiculoTest extends TestCase
 
     public function test_usuario_autenticado_registra_un_vehiculo(): void
     {
-        $respuesta = $this->actingAs($this->usuario, 'api')
-            ->postJson('/api/vehiculos', $this->datosBase);
+        $respuesta = $this->actingAs($this->usuario)
+            ->postJson('/vehiculos', $this->datosBase);
 
-        $respuesta->assertCreated()
-            ->assertJsonPath('vehiculo.placa', 'P123456')
-            ->assertJsonPath('vehiculo.marca', 'Toyota')
-            ->assertJsonPath('vehiculo.modelo', 'Hiace');
+        $respuesta->assertRedirect(route('vehiculos.index'))
+            ->assertSessionHas('success');
 
         $vehiculo = Vehiculo::where('placa', 'P123456')->first();
+        expect($vehiculo->marca)->toBe('Toyota')
+            ->and($vehiculo->modelo)->toBe('Hiace');
         expect($vehiculo)->not->toBeNull()
             ->and(
                 DB::table('flota.vehiculo_marca_modelo')
@@ -92,8 +92,8 @@ class VehiculoTest extends TestCase
         $kia = MarcaVehiculo::where('nombre', 'Kia')->first();
 
         // CB125 es de Honda, no puede registrarse como Kia
-        $this->actingAs($this->usuario, 'api')
-            ->postJson('/api/vehiculos', [
+        $this->actingAs($this->usuario)
+            ->postJson('/vehiculos', [
                 ...$this->datosBase,
                 'marca_vehiculo_id' => $kia->id_marca,
                 'modelo_vehiculo_id' => $cb125->id_modelo,
@@ -110,8 +110,8 @@ class VehiculoTest extends TestCase
         $van = TipoVehiculo::where('nombre', 'Van')->first();
 
         // Un modelo de moto no admite el tipo Van
-        $this->actingAs($this->usuario, 'api')
-            ->postJson('/api/vehiculos', [
+        $this->actingAs($this->usuario)
+            ->postJson('/vehiculos', [
                 ...$this->datosBase,
                 'marca_vehiculo_id' => $cb125->marca_vehiculo_id,
                 'modelo_vehiculo_id' => $cb125->id_modelo,
@@ -122,36 +122,38 @@ class VehiculoTest extends TestCase
 
         // Con su tipo correcto (Motocicleta) sí se registra
         $moto = TipoVehiculo::where('nombre', 'Motocicleta')->first();
-        $this->actingAs($this->usuario, 'api')
-            ->postJson('/api/vehiculos', [
+        $this->actingAs($this->usuario)
+            ->postJson('/vehiculos', [
                 ...$this->datosBase,
                 'placa' => 'M654321',
                 'marca_vehiculo_id' => $cb125->marca_vehiculo_id,
                 'modelo_vehiculo_id' => $cb125->id_modelo,
                 'tipo_vehiculo_id' => $moto->id_tipo_vehiculo,
             ])
-            ->assertCreated();
+            ->assertRedirect(route('vehiculos.index'));
     }
 
     public function test_normaliza_la_placa_a_mayusculas_sin_separadores(): void
     {
-        $this->actingAs($this->usuario, 'api')
-            ->postJson('/api/vehiculos', [...$this->datosBase, 'placa' => ' c 345-678'])
-            ->assertCreated()
-            ->assertJsonPath('vehiculo.placa', 'C345678');
+        $this->actingAs($this->usuario)
+            ->postJson('/vehiculos', [...$this->datosBase, 'placa' => ' c 345-678'])
+            ->assertRedirect(route('vehiculos.index'));
+
+        expect(Vehiculo::where('placa', 'C345678')->exists())->toBeTrue();
     }
 
     public function test_acepta_placas_con_menos_de_seis_digitos_y_categorias_mb_ab(): void
     {
         foreach (['P1234', 'M12345', 'AB12345', 'MB123', 'RE123456', 'CD123456'] as $placa) {
-            $this->actingAs($this->usuario, 'api')
-                ->postJson('/api/vehiculos', [
+            $this->actingAs($this->usuario)
+                ->postJson('/vehiculos', [
                     ...$this->datosBase,
                     'placa' => $placa,
                     'anio' => 2020,
                 ])
-                ->assertCreated()
-                ->assertJsonPath('vehiculo.placa', $placa);
+                ->assertRedirect(route('vehiculos.index'));
+
+            expect(Vehiculo::where('placa', $placa)->exists())->toBeTrue();
         }
     }
 
@@ -161,7 +163,7 @@ class VehiculoTest extends TestCase
 
         foreach ($casosInvalidos as $placa) {
             $this->actingAs($this->usuario, 'api')
-                ->postJson('/api/vehiculos', [...$this->datosBase, 'placa' => $placa])
+                ->postJson('/vehiculos', [...$this->datosBase, 'placa' => $placa])
                 ->assertUnprocessable()
                 ->assertJsonValidationErrors('placa');
         }
@@ -173,8 +175,8 @@ class VehiculoTest extends TestCase
     {
         Vehiculo::create($this->datosBase);
 
-        $respuesta = $this->actingAs($this->usuario, 'api')
-            ->postJson('/api/vehiculos', $this->datosBase);
+        $respuesta = $this->actingAs($this->usuario)
+            ->postJson('/vehiculos', $this->datosBase);
 
         $respuesta->assertUnprocessable()
             ->assertJsonValidationErrors('placa');
@@ -184,8 +186,8 @@ class VehiculoTest extends TestCase
 
     public function test_valida_campos_obligatorios_y_rangos(): void
     {
-        $respuesta = $this->actingAs($this->usuario, 'api')
-            ->postJson('/api/vehiculos', [
+        $respuesta = $this->actingAs($this->usuario)
+            ->postJson('/vehiculos', [
                 'placa' => '',
                 'tipo_vehiculo_id' => 99999,
                 'anio' => 1900,
@@ -198,14 +200,14 @@ class VehiculoTest extends TestCase
 
     public function test_rechaza_anios_futuros(): void
     {
-        $this->actingAs($this->usuario, 'api')
-            ->postJson('/api/vehiculos', [...$this->datosBase, 'anio' => (int) date('Y') + 1])
+        $this->actingAs($this->usuario)
+            ->postJson('/vehiculos', [...$this->datosBase, 'anio' => (int) date('Y') + 1])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('anio');
 
-        $this->actingAs($this->usuario, 'api')
-            ->postJson('/api/vehiculos', [...$this->datosBase, 'anio' => (int) date('Y')])
-            ->assertCreated();
+        $this->actingAs($this->usuario)
+            ->postJson('/vehiculos', [...$this->datosBase, 'anio' => (int) date('Y')])
+            ->assertRedirect(route('vehiculos.index'));
     }
 
     public function test_actualiza_un_vehiculo_sin_chocar_con_su_propia_placa(): void
@@ -213,10 +215,11 @@ class VehiculoTest extends TestCase
         $vehiculo = Vehiculo::create($this->datosBase);
 
         // La misma placa debe ser válida al editar el propio vehículo
-        $this->actingAs($this->usuario, 'api')
-            ->putJson("/api/vehiculos/{$vehiculo->id_vehiculo}", [...$this->datosBase, 'anio' => 2022])
-            ->assertOk()
-            ->assertJsonPath('vehiculo.anio', 2022);
+        $this->actingAs($this->usuario)
+            ->putJson("/vehiculos/{$vehiculo->id_vehiculo}", [...$this->datosBase, 'anio' => 2022])
+            ->assertRedirect(route('vehiculos.index'));
+
+        expect($vehiculo->refresh()->anio)->toBe(2022);
 
         expect(Vehiculo::where('placa', 'P123456')->count())->toBe(1);
     }
@@ -227,16 +230,18 @@ class VehiculoTest extends TestCase
         $canter = ModeloVehiculo::where('nombre', 'Canter')->first();
         $mitsubishi = MarcaVehiculo::where('nombre', 'Mitsubishi')->first();
 
-        $this->actingAs($this->usuario, 'api')
-            ->putJson("/api/vehiculos/{$vehiculo->id_vehiculo}", [
+        $this->actingAs($this->usuario)
+            ->putJson("/vehiculos/{$vehiculo->id_vehiculo}", [
                 ...$this->datosBase,
                 'marca_vehiculo_id' => $mitsubishi->id_marca,
                 'modelo_vehiculo_id' => $canter->id_modelo,
                 'tipo_vehiculo_id' => $canter->tipo_vehiculo_id,
             ])
-            ->assertOk()
-            ->assertJsonPath('vehiculo.marca', 'Mitsubishi')
-            ->assertJsonPath('vehiculo.modelo', 'Canter');
+            ->assertRedirect(route('vehiculos.index'));
+
+        $vehiculo->refresh();
+        expect($vehiculo->marca)->toBe('Mitsubishi')
+            ->and($vehiculo->modelo)->toBe('Canter');
 
         expect(
             DB::table('flota.vehiculo_marca_modelo')
@@ -255,10 +260,9 @@ class VehiculoTest extends TestCase
     {
         $vehiculo = Vehiculo::create($this->datosBase);
 
-        $this->actingAs($this->usuario, 'api')
-            ->postJson("/api/vehiculos/{$vehiculo->id_vehiculo}/desactivar")
-            ->assertOk()
-            ->assertJsonPath('vehiculo.estado.nombre_estado', 'INACTIVO');
+        $this->actingAs($this->usuario)
+            ->postJson("/vehiculos/{$vehiculo->id_vehiculo}/desactivar")
+            ->assertRedirect(route('vehiculos.edit', ['vehiculo' => $vehiculo->id_vehiculo]));
 
         $vehiculo->refresh();
         expect($vehiculo->estado->nombre_estado)->toBe('INACTIVO')
@@ -271,10 +275,9 @@ class VehiculoTest extends TestCase
         $inactivo = EstadoVehiculo::where('nombre_estado', 'INACTIVO')->first();
         $vehiculo->update(['estado_vehiculo_id' => $inactivo->id_estado]);
 
-        $this->actingAs($this->usuario, 'api')
-            ->postJson("/api/vehiculos/{$vehiculo->id_vehiculo}/reactivar")
-            ->assertOk()
-            ->assertJsonPath('vehiculo.estado.nombre_estado', 'DISPONIBLE');
+        $this->actingAs($this->usuario)
+            ->postJson("/vehiculos/{$vehiculo->id_vehiculo}/reactivar")
+            ->assertRedirect(route('vehiculos.edit', ['vehiculo' => $vehiculo->id_vehiculo]));
 
         expect($vehiculo->refresh()->estado->nombre_estado)->toBe('DISPONIBLE');
     }

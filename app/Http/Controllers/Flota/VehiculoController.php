@@ -11,36 +11,33 @@ use App\Models\ModeloVehiculo;
 use App\Models\Sucursal;
 use App\Models\TipoVehiculo;
 use App\Models\Vehiculo;
-use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Validation\ValidationException;
+use Inertia\Inertia;
+use Inertia\Response;
 
 class VehiculoController extends Controller
 {
     /**
      * Listado del parque de vehículos con su tipo, estado y sucursal base.
      */
-    public function index(): JsonResponse
+    public function index(): Response
     {
-        $vehiculos = Vehiculo::query()
-            ->with(['tipo', 'estado', 'sucursal'])
-            ->orderBy('placa')
-            ->get();
-
-        return response()->json(['vehiculos' => $vehiculos]);
+        return Inertia::render('flota/VehiculosIndex', [
+            'vehiculos' => Vehiculo::query()
+                ->with(['tipo', 'estado', 'sucursal'])
+                ->orderBy('placa')
+                ->get(),
+        ]);
     }
 
     /**
-     * Catálogos para el formulario de registro: tipos, estados, sucursales,
-     * marcas fijas y sus modelos.
+     * Formulario de registro con los catálogos: tipos, estados, sucursales,
+     * marcas activas y sus modelos.
      */
-    public function opciones(): JsonResponse
+    public function create(): Response
     {
-        return response()->json([
-            'tipos' => TipoVehiculo::orderBy('nombre')->get(),
-            'estados' => EstadoVehiculo::orderBy('nombre_estado')->get(),
-            'sucursales' => Sucursal::orderBy('nombre_sucursal')->get(),
-            'marcas' => MarcaVehiculo::where('activa', true)->orderBy('nombre')->get(),
-            'modelos' => ModeloVehiculo::where('activa', true)->orderBy('nombre')->get(),
-        ]);
+        return Inertia::render('flota/VehiculosCreate', $this->catalogos());
     }
 
     /**
@@ -48,21 +45,11 @@ class VehiculoController extends Controller
      * La marca y el modelo provienen del catálogo y quedan en la pivote
      * flota.vehiculo_marca_modelo (además de las columnas de lectura).
      */
-    public function store(StoreVehiculoRequest $request): JsonResponse
+    public function store(StoreVehiculoRequest $request): RedirectResponse
     {
         $datos = $request->validated();
 
-        // La validación ya garantiza la existencia; el guard cubre condiciones de carrera.
-        $marca = MarcaVehiculo::query()->whereKey($datos['marca_vehiculo_id'])->first();
-        $modelo = $datos['modelo_vehiculo_id'] !== null
-            ? ModeloVehiculo::query()->whereKey($datos['modelo_vehiculo_id'])->first()
-            : null;
-
-        if ($marca === null || ($datos['modelo_vehiculo_id'] !== null && $modelo === null)) {
-            return response()->json([
-                'message' => 'La marca o el modelo indicados no existen en el catálogo.',
-            ], 422);
-        }
+        [$marca, $modelo] = $this->resolverMarcaModelo($datos);
 
         $vehiculo = Vehiculo::create([
             ...$datos,
@@ -76,39 +63,31 @@ class VehiculoController extends Controller
             ]);
         }
 
-        return response()->json([
-            'message' => "Vehículo {$vehiculo->placa} registrado correctamente.",
-            'vehiculo' => $vehiculo->load(['tipo', 'estado', 'sucursal', 'modelos.marca']),
-        ], 201);
+        return redirect()
+            ->route('vehiculos.index')
+            ->with('success', "Vehículo {$vehiculo->placa} registrado correctamente.");
     }
 
     /**
-     * Datos completos de un vehículo para el formulario de edición.
+     * Formulario de edición con el vehículo hidratado desde la pivote
+     * marca-modelo y los catálogos vigentes.
      */
-    public function show(Vehiculo $vehiculo): JsonResponse
+    public function edit(Vehiculo $vehiculo): Response
     {
-        return response()->json([
-            'vehiculo' => $vehiculo->load(['tipo', 'estado', 'sucursal', 'modelos.marca']),
+        return Inertia::render('flota/VehiculosEdit', [
+            ...$this->catalogos(),
+            'vehiculo' => $vehiculo->load(['tipo', 'estado', 'sucursal', 'modelos']),
         ]);
     }
 
     /**
      * Actualiza un vehículo existente; la placa no puede chocar con otro.
      */
-    public function update(UpdateVehiculoRequest $request, Vehiculo $vehiculo): JsonResponse
+    public function update(UpdateVehiculoRequest $request, Vehiculo $vehiculo): RedirectResponse
     {
         $datos = $request->validated();
 
-        $marca = MarcaVehiculo::query()->whereKey($datos['marca_vehiculo_id'])->first();
-        $modelo = $datos['modelo_vehiculo_id'] !== null
-            ? ModeloVehiculo::query()->whereKey($datos['modelo_vehiculo_id'])->first()
-            : null;
-
-        if ($marca === null || ($datos['modelo_vehiculo_id'] !== null && $modelo === null)) {
-            return response()->json([
-                'message' => 'La marca o el modelo indicados no existen en el catálogo.',
-            ], 422);
-        }
+        [$marca, $modelo] = $this->resolverMarcaModelo($datos);
 
         $vehiculo->update([
             ...$datos,
@@ -121,40 +100,77 @@ class VehiculoController extends Controller
             $modelo->id_modelo => ['marca_vehiculo_id' => $marca->id_marca],
         ]);
 
-        return response()->json([
-            'message' => "Vehículo {$vehiculo->placa} actualizado correctamente.",
-            'vehiculo' => $vehiculo->load(['tipo', 'estado', 'sucursal', 'modelos.marca']),
-        ]);
+        return redirect()
+            ->route('vehiculos.index')
+            ->with('success', "Vehículo {$vehiculo->placa} actualizado correctamente.");
     }
 
     /**
      * Desactiva el vehículo asignándole el estado INACTIVO: no se elimina,
      * para preservar los registros históricos (despachos, paradas, eventos).
      */
-    public function desactivar(Vehiculo $vehiculo): JsonResponse
+    public function desactivar(Vehiculo $vehiculo): RedirectResponse
     {
         $inactivo = EstadoVehiculo::query()->where('nombre_estado', 'INACTIVO')->firstOrFail();
 
         $vehiculo->update(['estado_vehiculo_id' => $inactivo->id_estado]);
 
-        return response()->json([
-            'message' => "Vehículo {$vehiculo->placa} desactivado. Conserva su historial operativo.",
-            'vehiculo' => $vehiculo->load('estado'),
-        ]);
+        return redirect()
+            ->route('vehiculos.edit', ['vehiculo' => $vehiculo->id_vehiculo])
+            ->with('success', "Vehículo {$vehiculo->placa} desactivado. Conserva su historial operativo.");
     }
 
     /**
      * Reactiva un vehículo inactivo devolviéndolo al estado DISPONIBLE.
      */
-    public function reactivar(Vehiculo $vehiculo): JsonResponse
+    public function reactivar(Vehiculo $vehiculo): RedirectResponse
     {
         $disponible = EstadoVehiculo::query()->where('nombre_estado', 'DISPONIBLE')->firstOrFail();
 
         $vehiculo->update(['estado_vehiculo_id' => $disponible->id_estado]);
 
-        return response()->json([
-            'message' => "Vehículo {$vehiculo->placa} reactivado y disponible para despachos.",
-            'vehiculo' => $vehiculo->load('estado'),
-        ]);
+        return redirect()
+            ->route('vehiculos.edit', ['vehiculo' => $vehiculo->id_vehiculo])
+            ->with('success', "Vehículo {$vehiculo->placa} reactivado y disponible para despachos.");
+    }
+
+    /**
+     * Catálogos compartidos por los formularios de registro y edición.
+     *
+     * @return array<string, mixed>
+     */
+    private function catalogos(): array
+    {
+        return [
+            'tipos' => TipoVehiculo::orderBy('nombre')->get(),
+            'estados' => EstadoVehiculo::orderBy('nombre_estado')->get(),
+            'sucursales' => Sucursal::orderBy('nombre_sucursal')->get(),
+            'marcas' => MarcaVehiculo::where('activa', true)->orderBy('nombre')->get(),
+            'modelos' => ModeloVehiculo::where('activa', true)->orderBy('nombre')->get(),
+        ];
+    }
+
+    /**
+     * Resuelve marca y modelo del catálogo; la validación garantiza la
+     * existencia, pero si el catálogo cambió entre carga y envío el error
+     * se muestra en el formulario como cualquier validación.
+     *
+     * @param  array<string, mixed>  $datos
+     * @return array{MarcaVehiculo, ModeloVehiculo|null}
+     */
+    private function resolverMarcaModelo(array $datos): array
+    {
+        $marca = MarcaVehiculo::query()->whereKey($datos['marca_vehiculo_id'])->first();
+        $modelo = $datos['modelo_vehiculo_id'] !== null
+            ? ModeloVehiculo::query()->whereKey($datos['modelo_vehiculo_id'])->first()
+            : null;
+
+        if ($marca === null || ($datos['modelo_vehiculo_id'] !== null && $modelo === null)) {
+            throw ValidationException::withMessages([
+                'marca_vehiculo_id' => 'La marca o el modelo indicados no existen en el catálogo.',
+            ]);
+        }
+
+        return [$marca, $modelo];
     }
 }

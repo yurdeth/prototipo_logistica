@@ -4,6 +4,12 @@ import { Head, router, useForm, usePage } from '@inertiajs/vue3';
 import { Truck } from '@/UI/Icons';
 import { dashboard } from '@/routes';
 import {
+    update as actualizarRuta,
+    desactivar as desactivarRuta,
+    edit as editarRuta,
+    reactivar as reactivarRuta,
+} from '@/routes/vehiculos';
+import {
     estadosVehiculoDemo,
     FORMATO_PLACA,
     marcasVehiculoDemo,
@@ -18,7 +24,6 @@ import {
     type TipoVehiculo,
     type Vehiculo,
 } from '@/config/Flota/vehiculos';
-import { apiJson, type ApiError } from '@/lib/api';
 import { esPositivo, fmtNumero, type Aviso } from '@/lib/formularios';
 import { useChecklist } from '@/composables/useChecklist';
 import FormPage from '@/components/Forms/FormPage.vue';
@@ -54,12 +59,26 @@ const idVehiculo = computed(() => {
         : null;
 });
 
-/* ───────── Catálogos (reales cuando responde la API) ───────── */
-const tipos = ref<TipoVehiculo[]>(tiposVehiculoDemo);
-const estados = ref<EstadoVehiculo[]>(estadosVehiculoDemo);
-const sucursales = ref<SucursalVehiculo[]>(sucursalesVehiculoDemo);
-const marcas = ref<MarcaVehiculoCatalogo[]>(marcasVehiculoDemo);
-const modelos = ref<ModeloVehiculoCatalogo[]>(modelosVehiculoDemo);
+/* ───────── Props del servidor: vehículo y catálogos ───────── */
+const props = defineProps<{
+    vehiculo: Vehiculo & {
+        modelos: {
+            id_modelo: number;
+            pivot: { marca_vehiculo_id: number };
+        }[];
+    };
+    tipos: TipoVehiculo[];
+    estados: EstadoVehiculo[];
+    sucursales: SucursalVehiculo[];
+    marcas: MarcaVehiculoCatalogo[];
+    modelos: ModeloVehiculoCatalogo[];
+}>();
+
+const tipos = ref<TipoVehiculo[]>(props.tipos);
+const estados = ref<EstadoVehiculo[]>(props.estados);
+const sucursales = ref<SucursalVehiculo[]>(props.sucursales);
+const marcas = ref<MarcaVehiculoCatalogo[]>(props.marcas);
+const modelos = ref<ModeloVehiculoCatalogo[]>(props.modelos);
 
 /* ───────── Formulario ───────── */
 // Límites del año del vehículo, compartidos por el input y los avisos.
@@ -83,58 +102,28 @@ const cargando = ref(true);
 // (bug: guardar sin tocar nada enviaba modelo en null y "borraba" marca/modelo).
 let hidratando = false;
 
-const cargarDatos = async (): Promise<void> => {
-    if (idVehiculo.value === null) return;
+const cargarDatos = (): void => {
+    hidratando = true;
 
-    try {
-        const [catalogos, respuesta] = await Promise.all([
-            apiJson<{
-                tipos: TipoVehiculo[];
-                estados: EstadoVehiculo[];
-                sucursales: SucursalVehiculo[];
-                marcas: MarcaVehiculoCatalogo[];
-                modelos: ModeloVehiculoCatalogo[];
-            }>('/api/vehiculos/opciones'),
-            apiJson<{
-                vehiculo: Vehiculo & {
-                    modelos: {
-                        id_modelo: number;
-                        pivot: { marca_vehiculo_id: number };
-                    }[];
-                };
-            }>(`/api/vehiculos/${idVehiculo.value}`),
-        ]);
+    const v = props.vehiculo;
+    form.placa = v.placa;
+    form.tipo_vehiculo_id = v.tipo.id_tipo_vehiculo;
+    form.estado_vehiculo_id = v.estado.id_estado;
+    form.sucursal_id = v.sucursal.id_sucursal;
+    form.marca_vehiculo_id = v.modelos[0]?.pivot.marca_vehiculo_id ?? null;
+    form.modelo_vehiculo_id = v.modelos[0]?.id_modelo ?? null;
+    form.anio = v.anio ?? '';
+    form.consumo_km_gal = v.consumo_km_gal ? Number(v.consumo_km_gal) : '';
 
-        hidratando = true;
-        if (catalogos.tipos?.length) tipos.value = catalogos.tipos;
-        if (catalogos.estados?.length) estados.value = catalogos.estados;
-        if (catalogos.sucursales?.length)
-            sucursales.value = catalogos.sucursales;
-        if (catalogos.marcas?.length) marcas.value = catalogos.marcas;
-        if (catalogos.modelos?.length) modelos.value = catalogos.modelos;
-
-        const v = respuesta.vehiculo;
-        form.placa = v.placa;
-        form.tipo_vehiculo_id = v.tipo.id_tipo_vehiculo;
-        form.estado_vehiculo_id = v.estado.id_estado;
-        form.sucursal_id = v.sucursal.id_sucursal;
-        form.marca_vehiculo_id = v.modelos[0]?.pivot.marca_vehiculo_id ?? null;
-        form.modelo_vehiculo_id = v.modelos[0]?.id_modelo ?? null;
-        form.anio = v.anio ?? '';
-        form.consumo_km_gal = v.consumo_km_gal ? Number(v.consumo_km_gal) : '';
-
-        // Los watchers de Vue se ejecutan antes del próximo render; espera ese
-        // ciclo antes de volver a habilitarlos.
-        await nextTick();
+    // Los watchers de Vue se ejecutan antes del próximo render; espera ese
+    // ciclo antes de volver a habilitarlos.
+    void nextTick().then(() => {
         hidratando = false;
-    } catch {
-        // Sin datos reales el formulario queda vacío; el usuario puede volver al listado.
-    } finally {
         cargando.value = false;
-    }
+    });
 };
 
-onMounted(() => void cargarDatos());
+onMounted(() => cargarDatos());
 
 const opcionesMarca = computed(() =>
     marcas.value.map((m) => ({ id: m.id_marca, nombre: m.nombre })),
@@ -298,46 +287,22 @@ const avisos = computed<Aviso[]>(() => {
 });
 
 /* ───────── Guardar cambios ───────── */
-const enviando = ref(false);
+const enviando = computed(() => form.processing);
 
-const guardar = async () => {
+const guardar = () => {
     if (idVehiculo.value === null || !completo.value || enviando.value) return;
 
-    enviando.value = true;
     form.clearErrors();
     form.placa = normalizarPlaca(form.placa);
-
-    try {
-        await apiJson(`/api/vehiculos/${idVehiculo.value}`, {
-            method: 'PUT',
-            body: form.data(),
-        });
-        router.visit('/vehiculos');
-    } catch (error) {
-        const apiError = error as ApiError;
-        // Errores de validación (422): se muestran junto a cada campo.
-        if (apiError.errors) {
-            const errores = Object.fromEntries(
-                Object.entries(apiError.errors).map(([campo, mensajes]) => [
-                    campo,
-                    mensajes[0],
-                ]),
-            );
-            form.setError(errores);
-        } else {
-            form.setError(
-                'placa',
-                'No se pudo actualizar el vehículo. Intenta nuevamente.',
-            );
-        }
-    } finally {
-        enviando.value = false;
-    }
+    form.put(actualizarRuta({ vehiculo: idVehiculo.value }).url);
 };
 
 /* ───────── Desactivar / reactivar (no elimina: preserva el historial) ───────── */
 const cambiandoEstado = ref(false);
 const mensajeEstado = ref<string | null>(null);
+const rutaPagina = computed(
+    () => editarRuta({ vehiculo: idVehiculo.value ?? 0 }).url,
+);
 
 const idEstadoInactivo = computed(
     () =>
@@ -351,7 +316,7 @@ const estaInactivo = computed(
         form.estado_vehiculo_id === idEstadoInactivo.value,
 );
 
-const cambiarEstadoFlota = async (accion: 'desactivar' | 'reactivar') => {
+const cambiarEstadoFlota = (accion: 'desactivar' | 'reactivar') => {
     if (idVehiculo.value === null || cambiandoEstado.value) return;
 
     const placa = normalizarPlaca(form.placa) || 'este vehículo';
@@ -365,21 +330,35 @@ const cambiarEstadoFlota = async (accion: 'desactivar' | 'reactivar') => {
     }
 
     cambiandoEstado.value = true;
-    try {
-        const respuesta = await apiJson<{
-            message: string;
-            vehiculo: { estado: EstadoVehiculo };
-        }>(`/api/vehiculos/${idVehiculo.value}/${accion}`, {
-            method: 'POST',
-        });
-        form.estado_vehiculo_id = respuesta.vehiculo.estado.id_estado;
-        mensajeEstado.value = respuesta.message;
-    } catch {
-        mensajeEstado.value = null;
-        alert(`No se pudo ${accion} el vehículo. Intenta nuevamente.`);
-    } finally {
-        cambiandoEstado.value = false;
-    }
+    const ruta =
+        accion === 'desactivar'
+            ? desactivarRuta({ vehiculo: idVehiculo.value })
+            : reactivarRuta({ vehiculo: idVehiculo.value });
+
+    router.post(
+        ruta.url,
+        {},
+        {
+            preserveScroll: true,
+            onSuccess: (pagina) => {
+                const v = pagina.props.vehiculo as
+                    | { estado: { id_estado: number } }
+                    | undefined;
+                if (v) form.estado_vehiculo_id = v.estado.id_estado;
+                mensajeEstado.value =
+                    accion === 'desactivar'
+                        ? `Vehículo ${placa} desactivado. Conserva su historial operativo.`
+                        : `Vehículo ${placa} reactivado y disponible para despachos.`;
+            },
+            onError: () => {
+                mensajeEstado.value = null;
+                alert(`No se pudo ${accion} el vehículo. Intenta nuevamente.`);
+            },
+            onFinish: () => {
+                cambiandoEstado.value = false;
+            },
+        },
+    );
 };
 </script>
 
