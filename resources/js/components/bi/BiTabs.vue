@@ -1,5 +1,13 @@
 <script setup lang="ts">
-defineProps<{ tabs: readonly { key: string; label: string }[] }>();
+withDefaults(
+    defineProps<{
+        tabs: readonly { key: string; label: string }[];
+        label?: string;
+    }>(),
+    {
+        label: 'Categorías de análisis',
+    },
+);
 const tab = defineModel<string>({ required: true });
 </script>
 
@@ -8,7 +16,7 @@ const tab = defineModel<string>({ required: true });
     <div
         class="flex flex-col gap-4 border-b border-sidebar-border/70 pb-4 lg:flex-row lg:items-center lg:justify-between"
         role="tablist"
-        aria-label="Categorías de análisis"
+        :aria-label="label"
     >
         <div class="flex flex-wrap gap-1 rounded-lg bg-muted/50 p-1">
             <button
