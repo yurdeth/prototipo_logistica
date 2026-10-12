@@ -86,6 +86,29 @@ class VehiculoTest extends TestCase
             )->toBeTrue();
     }
 
+    public function test_los_formularios_cargan_catalogos_desde_la_base(): void
+    {
+        // Los catálogos deben llegar sembrados en la base, no escritos a mano en la vista
+        $this->actingAs($this->usuario)
+            ->get('/vehiculos/crear')
+            ->assertOk()
+            ->assertInertia(
+                fn ($page) => $page
+                    ->component('flota/VehiculosCreate')
+                    ->where('tipos', fn ($tipos) => $tipos->pluck('nombre')->contains('Motocicleta'))
+                    ->where('estados', fn ($estados) => $estados->pluck('nombre_estado')->contains('INACTIVO'))
+                    ->where('marcas', fn ($marcas) => $marcas->pluck('nombre')->contains('Toyota'))
+                    ->where('modelos', fn ($modelos) => $modelos->pluck('nombre')->contains('Hiace')),
+            );
+
+        $this->actingAs($this->usuario)
+            ->get('/vehiculos')
+            ->assertOk()
+            ->assertInertia(
+                fn ($page) => $page->component('flota/VehiculosIndex'),
+            );
+    }
+
     public function test_rechaza_modelo_de_otra_marca(): void
     {
         $cb125 = ModeloVehiculo::where('nombre', 'CB125')->first();

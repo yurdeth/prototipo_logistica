@@ -63,6 +63,20 @@ class EmpleadoTest extends TestCase
         expect(Empleado::where('documento_identidad', '1234567')->exists())->toBeTrue();
     }
 
+    public function test_los_formularios_cargan_puestos_y_sucursales_desde_la_base(): void
+    {
+        // Los catálogos deben llegar sembrados en la base, no escritos a mano en la vista
+        $this->actingAs($this->usuario)
+            ->get('/empleados/crear')
+            ->assertOk()
+            ->assertInertia(
+                fn ($page) => $page
+                    ->component('personal/EmpleadosCreate')
+                    ->where('puestos', fn ($puestos) => $puestos->pluck('nombre_puesto')->contains('Conductor'))
+                    ->where('sucursales', fn ($sucursales) => $sucursales->pluck('nombre_sucursal')->contains('Bodega Base')),
+            );
+    }
+
     public function test_rechaza_documento_duplicado(): void
     {
         Empleado::create($this->datosBase);
