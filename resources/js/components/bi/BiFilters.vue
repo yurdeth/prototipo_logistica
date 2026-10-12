@@ -67,6 +67,9 @@ const controlClase =
             >
                 {{ alertaLabel }}
             </button>
+
+            <!-- Controles opcionales en la misma fila (por ejemplo sucursal o fechas). -->
+            <slot name="extra" />
         </div>
 
         <!-- Aquí van los filtros por estado (BiChips). -->
