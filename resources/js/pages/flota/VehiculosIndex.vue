@@ -223,13 +223,13 @@ const columnas: Columna[] = [
                         {{ v.sucursal.nombre_sucursal }}
                     </td>
 
-                    <!-- Consumo de combustible en kilómetros por litro. -->
+                    <!-- Consumo de combustible en kilómetros por galón. -->
                     <td
                         class="px-5 py-4 whitespace-nowrap text-muted-foreground"
                     >
                         {{
-                            v.consumo_km_l
-                                ? `${fmtNumero(Number(v.consumo_km_l), 2)} km/L`
+                            v.consumo_km_gal
+                                ? `${fmtNumero(Number(v.consumo_km_gal), 2)} km/gal`
                                 : '—'
                         }}
                     </td>

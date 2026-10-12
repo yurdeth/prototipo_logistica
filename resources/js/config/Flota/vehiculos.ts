@@ -27,7 +27,7 @@ export interface Vehiculo {
     marca: string | null;
     modelo: string | null;
     anio: number | null;
-    consumo_km_l: string | null;
+    consumo_km_gal: string | null;
     tipo: TipoVehiculo;
     estado: EstadoVehiculo;
     sucursal: SucursalVehiculo;
@@ -72,7 +72,7 @@ export const vehiculosDemo: Vehiculo[] = [
         marca: 'Toyota',
         modelo: 'Hilux',
         anio: 2023,
-        consumo_km_l: '35.50',
+        consumo_km_gal: '35.50',
         tipo: {
             id_tipo_vehiculo: 1,
             nombre: 'Motocicleta',
@@ -89,7 +89,7 @@ export const vehiculosDemo: Vehiculo[] = [
         marca: 'Nissan',
         modelo: 'Frontier',
         anio: 2022,
-        consumo_km_l: '30.00',
+        consumo_km_gal: '30.00',
         tipo: {
             id_tipo_vehiculo: 1,
             nombre: 'Motocicleta',
@@ -106,7 +106,7 @@ export const vehiculosDemo: Vehiculo[] = [
         marca: 'Mitsubishi',
         modelo: 'Canter',
         anio: 2021,
-        consumo_km_l: '8.20',
+        consumo_km_gal: '8.20',
         tipo: {
             id_tipo_vehiculo: 3,
             nombre: 'Camion Ligero',

@@ -73,7 +73,7 @@ const form = useForm({
     marca_vehiculo_id: null as number | null,
     modelo_vehiculo_id: null as number | null,
     anio: '' as number | '',
-    consumo_km_l: '' as number | '',
+    consumo_km_gal: '' as number | '',
 });
 
 const cargando = ref(true);
@@ -121,7 +121,7 @@ const cargarDatos = async (): Promise<void> => {
         form.marca_vehiculo_id = v.modelos[0]?.pivot.marca_vehiculo_id ?? null;
         form.modelo_vehiculo_id = v.modelos[0]?.id_modelo ?? null;
         form.anio = v.anio ?? '';
-        form.consumo_km_l = v.consumo_km_l ? Number(v.consumo_km_l) : '';
+        form.consumo_km_gal = v.consumo_km_gal ? Number(v.consumo_km_gal) : '';
 
         // Los watchers de Vue se ejecutan antes del próximo render; espera ese
         // ciclo antes de volver a habilitarlos.
@@ -282,8 +282,10 @@ const avisos = computed<Aviso[]>(() => {
         aviso('El año debe ser 1990 o posterior.', true);
     }
 
-    if (esPositivo(form.consumo_km_l) && Number(form.consumo_km_l) < 3) {
-        aviso('El consumo registrado es muy bajo: verifica la unidad (km/L).');
+    if (esPositivo(form.consumo_km_gal) && Number(form.consumo_km_gal) < 3) {
+        aviso(
+            'El consumo registrado es muy bajo: verifica la unidad (km/gal).',
+        );
     }
 
     if (estadoSeleccionado.value?.nombre_estado === 'INACTIVO') {
@@ -541,16 +543,16 @@ const cambiarEstadoFlota = async (accion: 'desactivar' | 'reactivar') => {
                         />
                         <InputField
                             id="consumo"
-                            v-model="form.consumo_km_l"
+                            v-model="form.consumo_km_gal"
                             label="Consumo"
                             type="number"
                             min="0.01"
                             max="999.99"
                             step="0.01"
                             placeholder="0.00"
-                            suffix="km/L"
+                            suffix="km/gal"
                             optional
-                            :error="form.errors.consumo_km_l"
+                            :error="form.errors.consumo_km_gal"
                         >
                             <template #hint>
                                 Kilómetros recorridos por litro de combustible.
@@ -687,8 +689,8 @@ const cambiarEstadoFlota = async (accion: 'desactivar' | 'reactivar') => {
                                 'Sin asignar'
                             }}</SummaryItem>
                             <SummaryItem label="Consumo">{{
-                                esPositivo(form.consumo_km_l)
-                                    ? `${fmtNumero(Number(form.consumo_km_l), 2)} km/L`
+                                esPositivo(form.consumo_km_gal)
+                                    ? `${fmtNumero(Number(form.consumo_km_gal), 2)} km/gal`
                                     : '—'
                             }}</SummaryItem>
                         </dl>

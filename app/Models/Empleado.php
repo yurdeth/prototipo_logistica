@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Table;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -57,6 +58,12 @@ class Empleado extends Model
     /**
      * @return array<string, string>
      */
+    /** @return HasMany<Despacho, $this> despachos donde este empleado fue conductor */
+    public function despachosComoConductor(): HasMany
+    {
+        return $this->hasMany(Despacho::class, 'conductor_empleado_id', 'id_empleado');
+    }
+
     protected function casts(): array
     {
         return [

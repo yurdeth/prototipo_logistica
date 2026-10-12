@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Table;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
@@ -33,6 +34,24 @@ class Sucursal extends Model
     public function territorio(): BelongsTo
     {
         return $this->belongsTo(Territorio::class, 'territorio_id', 'id_territorio');
+    }
+
+    /** @return HasMany<Envio, $this> */
+    public function enviosOrigen(): HasMany
+    {
+        return $this->hasMany(Envio::class, 'sucursal_origen_id', 'id_sucursal');
+    }
+
+    /** @return HasMany<Despacho, $this> */
+    public function despachos(): HasMany
+    {
+        return $this->hasMany(Despacho::class, 'sucursal_origen_id', 'id_sucursal');
+    }
+
+    /** @return HasMany<Vehiculo, $this> */
+    public function vehiculos(): HasMany
+    {
+        return $this->hasMany(Vehiculo::class, 'sucursal_id', 'id_sucursal');
     }
 
     // ubicacion es columna GENERATED geography(Point,4326) derivada de latitud/longitud: se expone calculada y nunca se escribe

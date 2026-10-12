@@ -24,12 +24,12 @@ use Illuminate\Support\Carbon;
  * @property string|null $marca
  * @property string|null $modelo
  * @property int|null $anio
- * @property string|null $consumo_km_l
+ * @property string|null $consumo_km_gal
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
 #[Table('flota.vehiculos')]
-#[Fillable(['placa', 'tipo_vehiculo_id', 'estado_vehiculo_id', 'sucursal_id', 'marca', 'modelo', 'anio', 'consumo_km_l'])]
+#[Fillable(['placa', 'tipo_vehiculo_id', 'estado_vehiculo_id', 'sucursal_id', 'marca', 'modelo', 'anio', 'consumo_km_gal'])]
 class Vehiculo extends Model
 {
     protected $primaryKey = 'id_vehiculo';
@@ -88,7 +88,7 @@ class Vehiculo extends Model
     {
         return [
             'anio' => 'integer',
-            'consumo_km_l' => 'decimal:2',
+            'consumo_km_gal' => 'decimal:2',
         ];
     }
 }

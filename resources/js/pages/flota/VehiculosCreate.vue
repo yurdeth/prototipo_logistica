@@ -118,7 +118,7 @@ const form = useForm({
     marca_vehiculo_id: null as number | null,
     modelo_vehiculo_id: null as number | null,
     anio: '' as number | '',
-    consumo_km_l: '' as number | '',
+    consumo_km_gal: '' as number | '',
 });
 
 const tipoSeleccionado = computed(() =>
@@ -248,8 +248,10 @@ const avisos = computed<Aviso[]>(() => {
         aviso('El año debe ser 1990 o posterior.', true);
     }
 
-    if (esPositivo(form.consumo_km_l) && Number(form.consumo_km_l) < 3) {
-        aviso('El consumo registrado es muy bajo: verifica la unidad (km/L).');
+    if (esPositivo(form.consumo_km_gal) && Number(form.consumo_km_gal) < 3) {
+        aviso(
+            'El consumo registrado es muy bajo: verifica la unidad (km/gal).',
+        );
     }
 
     if (
@@ -458,16 +460,16 @@ const enviar = async () => {
                         />
                         <InputField
                             id="consumo"
-                            v-model="form.consumo_km_l"
+                            v-model="form.consumo_km_gal"
                             label="Consumo"
                             type="number"
                             min="0.01"
                             max="999.99"
                             step="0.01"
                             placeholder="0.00"
-                            suffix="km/L"
+                            suffix="km/gal"
                             optional
-                            :error="form.errors.consumo_km_l"
+                            :error="form.errors.consumo_km_gal"
                         >
                             <template #hint>
                                 Kilómetros recorridos por litro de combustible.
@@ -528,8 +530,8 @@ const enviar = async () => {
                                 'Sin asignar'
                             }}</SummaryItem>
                             <SummaryItem label="Consumo">{{
-                                esPositivo(form.consumo_km_l)
-                                    ? `${fmtNumero(Number(form.consumo_km_l), 2)} km/L`
+                                esPositivo(form.consumo_km_gal)
+                                    ? `${fmtNumero(Number(form.consumo_km_gal), 2)} km/gal`
                                     : '—'
                             }}</SummaryItem>
                         </dl>

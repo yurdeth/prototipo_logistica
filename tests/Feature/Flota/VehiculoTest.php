@@ -61,7 +61,7 @@ class VehiculoTest extends TestCase
             'marca_vehiculo_id' => $toyota->id_marca,
             'modelo_vehiculo_id' => $hiace->id_modelo,
             'anio' => 2024,
-            'consumo_km_l' => 12.5,
+            'consumo_km_gal' => 12.5,
         ];
     }
 
@@ -189,11 +189,11 @@ class VehiculoTest extends TestCase
                 'placa' => '',
                 'tipo_vehiculo_id' => 99999,
                 'anio' => 1900,
-                'consumo_km_l' => 0,
+                'consumo_km_gal' => 0,
             ]);
 
         $respuesta->assertUnprocessable()
-            ->assertJsonValidationErrors(['placa', 'tipo_vehiculo_id', 'estado_vehiculo_id', 'sucursal_id', 'marca_vehiculo_id', 'anio', 'consumo_km_l']);
+            ->assertJsonValidationErrors(['placa', 'tipo_vehiculo_id', 'estado_vehiculo_id', 'sucursal_id', 'marca_vehiculo_id', 'anio', 'consumo_km_gal']);
     }
 
     public function test_rechaza_anios_futuros(): void

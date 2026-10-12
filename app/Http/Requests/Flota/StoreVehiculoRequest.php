@@ -68,7 +68,7 @@ class StoreVehiculoRequest extends FormRequest
             // salvadoreño (edad promedio ~15-17 años, con unidades de más de 20 en circulación).
             // Máximo: el año en curso; un vehículo no puede ser de un año futuro.
             'anio' => ['nullable', 'integer', 'min:1990', 'max:'.date('Y')],
-            'consumo_km_l' => ['nullable', 'numeric', 'min:0.01', 'max:999.99'],
+            'consumo_km_gal' => ['nullable', 'numeric', 'min:0.01', 'max:999.99'],
         ];
     }
 
@@ -98,9 +98,9 @@ class StoreVehiculoRequest extends FormRequest
             'anio.integer' => 'El año debe ser un número entero.',
             'anio.min' => 'El año debe ser 1990 o posterior.',
             'anio.max' => 'El año no puede ser posterior al año actual.',
-            'consumo_km_l.numeric' => 'El consumo debe ser un número.',
-            'consumo_km_l.min' => 'El consumo debe ser mayor a 0.',
-            'consumo_km_l.max' => 'El consumo no puede superar 999.99.',
+            'consumo_km_gal.numeric' => 'El consumo debe ser un número.',
+            'consumo_km_gal.min' => 'El consumo debe ser mayor a 0.',
+            'consumo_km_gal.max' => 'El consumo no puede superar 999.99.',
         ];
     }
 
@@ -112,7 +112,7 @@ class StoreVehiculoRequest extends FormRequest
     public function attributes(): array
     {
         return [
-            'consumo_km_l' => 'consumo',
+            'consumo_km_gal' => 'consumo',
             'anio' => 'año',
         ];
     }
