@@ -22,6 +22,7 @@ class DatabaseSeeder extends Seeder
         $this->call(TipoVehiculoSeeder::class);
         $this->call(MarcaVehiculoSeeder::class);
         $this->call(ModeloVehiculoSeeder::class);
+        $this->call(EnviosSeeder::class);
 
         // los estados y tipos de incidencia ya se siembran en sus migraciones
         // con insertOrIgnore; re-ejecutar db:seed no duplica nada

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 import { dashboard } from '@/routes';
 import { estadoInfo, prioridadInfo, slaInfo } from '@/config/Envios/envios';
 import { getSla, fmtFecha } from '@/composables/useEnviosBI';
@@ -8,6 +8,9 @@ import BiFields from '@/components/bi/DetailFields.vue';
 import BiTimeline from '@/components/bi/BiTimeline.vue';
 import BiBadge from '@/components/bi/BiBadge.vue';
 import BiStatus from '@/components/bi/BiStatus.vue';
+import FormField from '@/components/Forms/FormField.vue';
+import InputField from '@/components/Forms/InputField.vue';
+import { inputClase } from '@/lib/formularios';
 import type { Field, TimelineItem } from '@/components/bi/Utils';
 
 interface EventoEnvio {
@@ -15,6 +18,7 @@ interface EventoEnvio {
     estado: keyof typeof estadoInfo;
     ocurrido_en: string;
     nota: string | null;
+    responsable: string | null;
     latitud: number | null;
     longitud: number | null;
 }
@@ -39,6 +43,7 @@ interface DetalleEnvio {
 const props = defineProps<{
     envio: DetalleEnvio;
     eventos: EventoEnvio[];
+    estados: string[];
     permisos: { registrar: boolean; editar: boolean };
 }>();
 
@@ -104,14 +109,36 @@ const historial = computed<TimelineItem[]>(() =>
         key: ev.id_evento,
         color: estadoInfo[ev.estado].color,
         title: estadoInfo[ev.estado].label,
+        // Fecha y hora, y quién hizo el cambio
         meta:
             fmtFecha(ev.ocurrido_en) +
-            (ev.latitud !== null && ev.longitud !== null
-                ? ` · ${ev.latitud.toFixed(5)}, ${ev.longitud.toFixed(5)}`
-                : ''),
+            (ev.responsable ? ` · ${ev.responsable}` : ''),
         note: ev.nota || undefined,
+        // Ubicación del evento, si se registró
+        tag:
+            ev.latitud !== null && ev.longitud !== null
+                ? `${ev.latitud.toFixed(5)}, ${ev.longitud.toFixed(5)}`
+                : undefined,
     })),
 );
+
+/* ───────── Cambio de estado ───────── */
+const form = useForm({
+    estado: props.envio.estado as string,
+    nota: '',
+    latitud: '' as number | '',
+    longitud: '' as number | '',
+});
+
+// Al guardar, Inertia vuelve a pedir la página: el nuevo evento aparece sin recargar a mano.
+const cambiarEstado = () => {
+    if (form.processing || form.estado === props.envio.estado) return;
+
+    form.patch(`/envios/${props.envio.id_envio}/estado`, {
+        preserveScroll: true,
+        onSuccess: () => form.reset('nota', 'latitud', 'longitud'),
+    });
+};
 </script>
 
 <template>
@@ -180,6 +207,91 @@ const historial = computed<TimelineItem[]>(() =>
                 title="Especificaciones y fechas"
                 :fields="especificaciones"
             />
+        </section>
+
+        <section
+            v-if="permisos.editar"
+            class="rounded-xl border border-sidebar-border/70 bg-card p-4 shadow-sm sm:p-5"
+        >
+            <h2 class="text-sm font-semibold text-foreground">
+                Cambiar estado
+            </h2>
+            <p class="mt-1 text-sm text-muted-foreground">
+                Cada cambio queda registrado en el historial con tu usuario, la
+                fecha y la ubicación si la indicas.
+            </p>
+
+            <form
+                class="mt-4 grid gap-4 sm:grid-cols-2"
+                @submit.prevent="cambiarEstado"
+            >
+                <FormField
+                    id="nuevo-estado"
+                    label="Nuevo estado"
+                    required
+                    :error="form.errors.estado"
+                >
+                    <select
+                        id="nuevo-estado"
+                        v-model="form.estado"
+                        required
+                        :aria-invalid="!!form.errors.estado"
+                        :class="inputClase"
+                    >
+                        <option v-for="e in estados" :key="e" :value="e">
+                            {{ e.replace('_', ' ') }}
+                        </option>
+                    </select>
+                </FormField>
+
+                <InputField
+                    id="nota-estado"
+                    v-model="form.nota"
+                    label="Nota"
+                    maxlength="500"
+                    placeholder="Motivo o detalle del cambio"
+                    optional
+                    :error="form.errors.nota"
+                />
+
+                <InputField
+                    id="latitud-estado"
+                    v-model="form.latitud"
+                    label="Latitud"
+                    type="number"
+                    step="any"
+                    placeholder="13.69890"
+                    optional
+                    :error="form.errors.latitud"
+                />
+
+                <InputField
+                    id="longitud-estado"
+                    v-model="form.longitud"
+                    label="Longitud"
+                    type="number"
+                    step="any"
+                    placeholder="-89.19140"
+                    optional
+                    :error="form.errors.longitud"
+                />
+
+                <div class="sm:col-span-2">
+                    <button
+                        type="submit"
+                        :disabled="
+                            form.processing || form.estado === envio.estado
+                        "
+                        class="inline-flex h-10 items-center rounded-md bg-blue-700 px-4 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        {{
+                            form.processing
+                                ? 'Guardando...'
+                                : 'Registrar cambio'
+                        }}
+                    </button>
+                </div>
+            </form>
         </section>
 
         <section
