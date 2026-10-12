@@ -16,6 +16,7 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { dashboard, rutas } from '@/routes';
+import { index as empleadosRuta } from '@/routes/empleados';
 import { index as enviosRuta } from '@/routes/envios';
 import { index as vehiculosRuta } from '@/routes/vehiculos';
 import type { NavItem } from '@/types';
@@ -28,7 +29,7 @@ const mainNavItems: NavItem[] = [
     },
     { title: 'Envíos', href: enviosRuta(), icon: Package },
     { title: 'Rutas', href: rutas(), icon: Route },
-    { title: 'Repartidores', href: '#', icon: Users },
+    { title: 'Empleados', href: empleadosRuta(), icon: Users },
     { title: 'Vehículos', href: vehiculosRuta(), icon: Truck },
     { title: 'Clientes', href: '#', icon: Building2 },
     { title: 'Reportes', href: '#', icon: FileText },

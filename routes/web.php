@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Envios\EnvioController;
 use App\Http\Controllers\Flota\VehiculoController;
+use App\Http\Controllers\Personal\EmpleadoController;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'Welcome')->name('home');
@@ -47,6 +48,17 @@ Route::middleware(['auth'])->group(function () {
         Route::put('{vehiculo}', [VehiculoController::class, 'update'])->whereNumber('vehiculo')->name('update');
         Route::post('{vehiculo}/desactivar', [VehiculoController::class, 'desactivar'])->whereNumber('vehiculo')->name('desactivar');
         Route::post('{vehiculo}/reactivar', [VehiculoController::class, 'reactivar'])->whereNumber('vehiculo')->name('reactivar');
+    });
+
+    // Personal: vistas y operaciones de empleados (todo por Inertia)
+    Route::prefix('empleados')->name('empleados.')->group(function (): void {
+        Route::get('/', [EmpleadoController::class, 'index'])->name('index');
+        Route::get('crear', [EmpleadoController::class, 'create'])->name('create');
+        Route::post('/', [EmpleadoController::class, 'store'])->name('store');
+        Route::get('{empleado}/editar', [EmpleadoController::class, 'edit'])->whereNumber('empleado')->name('edit');
+        Route::put('{empleado}', [EmpleadoController::class, 'update'])->whereNumber('empleado')->name('update');
+        Route::post('{empleado}/desactivar', [EmpleadoController::class, 'desactivar'])->whereNumber('empleado')->name('desactivar');
+        Route::post('{empleado}/reactivar', [EmpleadoController::class, 'reactivar'])->whereNumber('empleado')->name('reactivar');
     });
 });
 

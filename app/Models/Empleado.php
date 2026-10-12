@@ -68,7 +68,8 @@ class Empleado extends Model
     {
         return [
             'activo' => 'boolean',
-            'fecha_contratacion' => 'date',
+            // date:Y-m-d serializa como fecha corta en JSON (los <input type="date"> no aceptan datetime ISO)
+            'fecha_contratacion' => 'date:Y-m-d',
         ];
     }
 }

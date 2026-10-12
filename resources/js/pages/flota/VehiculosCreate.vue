@@ -215,7 +215,7 @@ const avisos = computed<Aviso[]>(() => {
     const placaNormalizada = normalizarPlaca(form.placa);
     if (placaNormalizada && !FORMATO_PLACA.test(placaNormalizada)) {
         aviso(
-            'La placa no coincide con el formato nacional: letra (P, C, M, A, N, MB, AB, RE, CD o CC) + 3 a 6 dígitos, por ejemplo P123456.',
+            'La placa no coincide con el formato nacional: letra (P, C, M, A, N, MB, AB, RE, CD o CC) + hasta 6 caracteres alfanuméricos, por ejemplo P123456.',
             true,
         );
     }
@@ -328,7 +328,8 @@ const enviar = () => {
                         >
                             <template #hint>
                                 Formato nacional: letra (P, C, M, A, N, MB, AB,
-                                RE, CD o CC) + 3 a 6 dígitos. Única en la flota.
+                                RE, CD o CC) + hasta 6 caracteres. Única en la
+                                flota.
                             </template>
                         </InputField>
                         <InputField

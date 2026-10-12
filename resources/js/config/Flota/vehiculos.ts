@@ -34,17 +34,18 @@ export interface Vehiculo {
 }
 
 /* ───────── Placas: formato nacional (El Salvador) ─────────
- * La placa es la letra(s) de categoría del vehículo seguida de 3 a 6 dígitos
- * (las emisiones antiguas tienen placas más cortas):
+ * La placa es la letra(s) de categoría del vehículo seguida de hasta 6
+ * caracteres alfanuméricos; la cantidad exacta varía según la emisión
+ * (formatos antiguos cortos y mixtos como "P 4 57A" -> "P457A"):
  *   P  Particular            C  Carga
  *   M  Motocicleta           A  Transporte público
  *   N  No remunerado         MB Microbús / AB Transporte colectivo
  *   RE Remolques             CD Cuerpo diplomático
  *   CC Cuerpo consular
- * Ejemplos válidos: P123456, C345678, M1234, AB12345.
+ * Ejemplos válidos: P123456, C345678, M1234, AB12345, P457A.
  * El servidor valida la misma regla en StoreVehiculoRequest::FORMATO_PLACA.
  */
-export const FORMATO_PLACA = /^(P|C|M|A|N|MB|AB|RE|CD|CC)\d{3,6}$/;
+export const FORMATO_PLACA = /^(P|C|M|A|N|MB|AB|RE|CD|CC)[A-Z0-9]{1,6}$/;
 
 // Mayúsculas, sin espacios ni guiones (misma normalización que aplica el servidor).
 export const normalizarPlaca = (valor: string) =>

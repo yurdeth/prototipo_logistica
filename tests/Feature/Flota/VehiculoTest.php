@@ -142,9 +142,9 @@ class VehiculoTest extends TestCase
         expect(Vehiculo::where('placa', 'C345678')->exists())->toBeTrue();
     }
 
-    public function test_acepta_placas_con_menos_de_seis_digitos_y_categorias_mb_ab(): void
+    public function test_acepta_placas_cortas_mixtas_y_categorias_mb_ab(): void
     {
-        foreach (['P1234', 'M12345', 'AB12345', 'MB123', 'RE123456', 'CD123456'] as $placa) {
+        foreach (['P1234', 'M12345', 'AB12345', 'MB123', 'RE123456', 'CD123456', 'P457A', 'P12'] as $placa) {
             $this->actingAs($this->usuario)
                 ->postJson('/vehiculos', [
                     ...$this->datosBase,
@@ -157,9 +157,18 @@ class VehiculoTest extends TestCase
         }
     }
 
+    public function test_normaliza_formatos_con_espacios_y_guiones_internos(): void
+    {
+        $this->actingAs($this->usuario)
+            ->postJson('/vehiculos', [...$this->datosBase, 'placa' => 'P 4 57A'])
+            ->assertRedirect(route('vehiculos.index'));
+
+        expect(Vehiculo::where('placa', 'P457A')->exists())->toBeTrue();
+    }
+
     public function test_rechaza_placas_fuera_del_formato_nacional(): void
     {
-        $casosInvalidos = ['XYZ12345', 'P1234567', 'P12', 'Q123456', '123456P', 'P12-45A'];
+        $casosInvalidos = ['XYZ12345', 'P1234567', 'Q123456', '123456P', 'P#123'];
 
         foreach ($casosInvalidos as $placa) {
             $this->actingAs($this->usuario, 'api')
