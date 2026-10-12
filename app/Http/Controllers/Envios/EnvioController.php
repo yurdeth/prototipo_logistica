@@ -3,15 +3,17 @@
 namespace App\Http\Controllers\Envios;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Envios\CambiarEstadoEnvioRequest;
 use App\Http\Requests\Envios\StoreEnvioRequest;
 use App\Http\Requests\Envios\UpdateEnvioRequest;
+use App\Models\Envio;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -144,34 +146,25 @@ class EnvioController extends Controller
     {
         $data = $request->validated();
 
-        // Envío + evento inicial en una sola transacción: si algo falla, no queda nada a medias
-        $id = DB::transaction(function () use ($data): int {
-            $estadoId = $this->estadoId('REGISTRADO');
+        // El modelo Envio genera la guía definitiva y el evento inicial dentro de la misma
+        // transacción (ver Envio::booted y Envio::save): si algo falla, no queda nada a medias.
+        $envio = new Envio([
+            'cliente_remitente_id' => $data['cliente_remitente_id'],
+            'cliente_destinatario_id' => $data['cliente_destinatario_id'],
+            'sucursal_origen_id' => $data['sucursal_origen_id'],
+            'direccion_destino' => $data['direccion_destino'],
+            'territorio_destino_id' => $data['territorio_destino_id'],
+            'peso_kg' => $data['peso_kg'],
+            'volumen_m3' => $data['volumen_m3'] ?? null,
+            'estado_envio_id' => $this->estadoId('REGISTRADO'),
+            'prioridad' => $data['prioridad'],
+            'fecha_comprometida' => Carbon::parse($data['fecha_comprometida']),
+        ]);
+        $envio->latitudEvento = $data['latitud'] ?? null;
+        $envio->longitudEvento = $data['longitud'] ?? null;
+        $envio->save();
 
-            $id = DB::table('envios.envios')->insertGetId([
-                'codigo_guia' => 'TMP-'.Str::random(20), // temporal: la guía definitiva se arma con el id
-                'cliente_remitente_id' => $data['cliente_remitente_id'],
-                'cliente_destinatario_id' => $data['cliente_destinatario_id'],
-                'sucursal_origen_id' => $data['sucursal_origen_id'],
-                'direccion_destino' => $data['direccion_destino'],
-                'territorio_destino_id' => $data['territorio_destino_id'],
-                'peso_kg' => $data['peso_kg'],
-                'volumen_m3' => $data['volumen_m3'] ?? null,
-                'estado_envio_id' => $estadoId,
-                'prioridad' => $data['prioridad'],
-                'fecha_comprometida' => Carbon::parse($data['fecha_comprometida']),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ], 'id_envio');
-
-            DB::table('envios.envios')
-                ->where('id_envio', $id)
-                ->update(['codigo_guia' => 'PK-'.str_pad((string) $id, 6, '0', STR_PAD_LEFT)]);
-
-            $this->registrarEvento($id, $estadoId, 'Envío registrado', $data['latitud'] ?? null, $data['longitud'] ?? null);
-
-            return $id;
-        });
+        $id = $envio->getKey();
 
         return to_route('envios.show', $id)->with('success', 'Envío registrado correctamente.');
     }
@@ -184,17 +177,20 @@ class EnvioController extends Controller
 
         $eventos = DB::table('envios.envio_eventos as ev')
             ->join('envios.estados_envios as s', 's.id_estado', '=', 'ev.estado_envio_id')
+            ->leftJoin('users as u', 'u.id', '=', 'ev.usuario_id')
             ->where('ev.envio_id', $envio)
             ->orderBy('ev.ocurrido_en')
             ->orderBy('ev.id_evento')
             ->selectRaw('ev.id_evento, s.nombre_estado as estado, ev.ocurrido_en, ev.nota,
-                ST_Y(ev.ubicacion::geometry) as latitud, ST_X(ev.ubicacion::geometry) as longitud')
+                ST_Y(ev.ubicacion::geometry) as latitud, ST_X(ev.ubicacion::geometry) as longitud,
+                u.name as responsable')
             ->get()
             ->map(fn ($ev) => [
                 'id_evento' => $ev->id_evento,
                 'estado' => $ev->estado,
                 'ocurrido_en' => $this->iso($ev->ocurrido_en),
                 'nota' => $ev->nota,
+                'responsable' => $ev->responsable,
                 'latitud' => $ev->latitud !== null ? (float) $ev->latitud : null,
                 'longitud' => $ev->longitud !== null ? (float) $ev->longitud : null,
             ]);
@@ -217,6 +213,7 @@ class EnvioController extends Controller
                 'fecha_entrega' => $this->iso($detalle->fecha_entrega),
             ],
             'eventos' => $eventos,
+            'estados' => self::ESTADOS,
             'permisos' => $this->permisos(),
         ]);
     }
@@ -262,12 +259,9 @@ class EnvioController extends Controller
 
         DB::transaction(function () use ($data, $envio): void {
             // Se bloquea la fila para evitar que dos personas cambien el estado a la vez
-            $actual = DB::table('envios.envios')->where('id_envio', $envio)->lockForUpdate()->first();
-            abort_if(! $actual, 404);
+            $modelo = Envio::query()->lockForUpdate()->findOrFail($envio);
 
-            $estadoNuevo = $this->estadoId($data['estado']);
-
-            DB::table('envios.envios')->where('id_envio', $envio)->update([
+            $modelo->fill([
                 'cliente_remitente_id' => $data['cliente_remitente_id'],
                 'cliente_destinatario_id' => $data['cliente_destinatario_id'],
                 'sucursal_origen_id' => $data['sucursal_origen_id'],
@@ -275,19 +269,40 @@ class EnvioController extends Controller
                 'territorio_destino_id' => $data['territorio_destino_id'],
                 'peso_kg' => $data['peso_kg'],
                 'volumen_m3' => $data['volumen_m3'] ?? null,
-                'estado_envio_id' => $estadoNuevo,
+                'estado_envio_id' => $this->estadoId($data['estado']),
                 'prioridad' => $data['prioridad'],
                 'fecha_comprometida' => Carbon::parse($data['fecha_comprometida']),
-                'updated_at' => now(),
             ]);
 
-            // Cada cambio de estado deja rastro en el historial
-            if ((int) $actual->estado_envio_id !== $estadoNuevo) {
-                $this->registrarEvento($envio, $estadoNuevo, $data['nota'] ?? 'Cambio de estado');
-            }
+            // Si el estado cambió, el modelo registra el evento con esta nota (Envio::booted)
+            $modelo->notaEvento = $data['nota'] ?? null;
+            $modelo->save();
         });
 
         return to_route('envios.show', $envio)->with('success', 'Envío actualizado correctamente.');
+    }
+
+    /** Cambia solo el estado desde el detalle; Inertia refresca el historial sin recargar. */
+    public function cambiarEstado(CambiarEstadoEnvioRequest $request, int $envio): RedirectResponse
+    {
+        $data = $request->validated();
+
+        DB::transaction(function () use ($data, $envio): void {
+            $modelo = Envio::query()->lockForUpdate()->findOrFail($envio);
+            $nuevo = $this->estadoId($data['estado']);
+
+            if ((int) $modelo->estado_envio_id === $nuevo) {
+                throw ValidationException::withMessages(['estado' => 'El envío ya se encuentra en ese estado.']);
+            }
+
+            $modelo->estado_envio_id = $nuevo;
+            $modelo->notaEvento = $data['nota'] ?? null;
+            $modelo->latitudEvento = $data['latitud'] ?? null;
+            $modelo->longitudEvento = $data['longitud'] ?? null;
+            $modelo->save();
+        });
+
+        return back()->with('success', 'Estado actualizado correctamente.');
     }
 
     /* ===================== CONSULTAS DE APOYO ===================== */
@@ -514,26 +529,6 @@ class EnvioController extends Controller
     private function estadoId(string $nombre): int
     {
         return (int) DB::table('envios.estados_envios')->where('nombre_estado', $nombre)->value('id_estado');
-    }
-
-    /** Inserta un evento; si hay coordenadas, guarda el punto geográfico (lng, lat) en `ubicacion`. */
-    private function registrarEvento(int $envioId, int $estadoId, ?string $nota, mixed $lat = null, mixed $lng = null): void
-    {
-        if ($lat !== null && $lng !== null) {
-            DB::insert(
-                'INSERT INTO envios.envio_eventos (envio_id, estado_envio_id, nota, ubicacion)
-                 VALUES (?, ?, ?, ST_SetSRID(ST_MakePoint(?::double precision, ?::double precision), 4326)::geography)',
-                [$envioId, $estadoId, $nota, (float) $lng, (float) $lat]
-            );
-
-            return;
-        }
-
-        DB::table('envios.envio_eventos')->insert([
-            'envio_id' => $envioId,
-            'estado_envio_id' => $estadoId,
-            'nota' => $nota,
-        ]);
     }
 
     private function iso(?string $valor): ?string

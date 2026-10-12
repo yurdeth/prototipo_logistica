@@ -21,6 +21,7 @@ class DatabaseSeeder extends Seeder
         $this->call(TipoVehiculoSeeder::class);
         $this->call(MarcaVehiculoSeeder::class);
         $this->call(ModeloVehiculoSeeder::class);
+        $this->call(EnviosSeeder::class);
 
         // User::factory(10)->create();
 

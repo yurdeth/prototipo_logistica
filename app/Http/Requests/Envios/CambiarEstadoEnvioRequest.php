@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Envios;
 
-use App\Http\Controllers\EnvioController;
+use App\Http\Controllers\Envios\EnvioController;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 

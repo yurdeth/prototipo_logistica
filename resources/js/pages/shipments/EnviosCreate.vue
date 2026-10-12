@@ -26,6 +26,7 @@ import FormPage from '@/components/Forms/FormPage.vue';
 import FormSection from '@/components/Forms/FormSection.vue';
 import StatCard from '@/components/Forms/StatCard.vue';
 import SelectField from '@/components/Forms/SelectField.vue';
+import SearchSelectField from '@/components/Forms/SearchSelectField.vue';
 import InputField from '@/components/Forms/InputField.vue';
 import SummaryPanel from '@/components/Forms/SummaryPanel.vue';
 import SummaryGroup from '@/components/Forms/SummaryGroup.vue';
@@ -282,20 +283,20 @@ const enviar = () => {
                     description="Quién envía y quién recibe el paquete."
                 >
                     <div class="grid gap-5 sm:grid-cols-2">
-                        <SelectField
+                        <SearchSelectField
                             id="remitente"
                             v-model="form.cliente_remitente_id"
                             label="Remitente"
-                            placeholder="Selecciona un cliente"
+                            placeholder="Busca o selecciona un cliente"
                             :groups="gruposClientes"
                             required
                             :error="form.errors.cliente_remitente_id"
                         />
-                        <SelectField
+                        <SearchSelectField
                             id="destinatario"
                             v-model="form.cliente_destinatario_id"
                             label="Destinatario"
-                            placeholder="Selecciona un cliente"
+                            placeholder="Busca o selecciona un cliente"
                             :groups="gruposClientes"
                             required
                             :error="form.errors.cliente_destinatario_id"

@@ -11,7 +11,6 @@ Route::redirect('email/verify/{any?}', '/dashboard')->where('any', '.*');
 Route::middleware(['auth'])->group(function () {
     Route::inertia('dashboard', 'Dashboard')->name('dashboard');
 
-    //  Envíos (controlador )
     Route::prefix('envios')->name('envios.')->group(function () {
         Route::get('/', [EnvioController::class, 'index'])->name('index');
         Route::get('exportar', [EnvioController::class, 'exportar'])->name('exportar');
@@ -24,6 +23,7 @@ Route::middleware(['auth'])->group(function () {
         Route::middleware('can:envios.editar')->group(function () {
             Route::get('{envio}/editar', [EnvioController::class, 'edit'])->whereNumber('envio')->name('edit');
             Route::put('{envio}', [EnvioController::class, 'update'])->whereNumber('envio')->name('update');
+            Route::patch('{envio}/estado', [EnvioController::class, 'cambiarEstado'])->whereNumber('envio')->name('estado');
         });
 
         Route::get('{envio}', [EnvioController::class, 'show'])->whereNumber('envio')->name('show');

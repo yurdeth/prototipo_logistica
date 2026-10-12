@@ -163,20 +163,20 @@ const guardar = () => {
                     description="Quién envía y quién recibe el paquete."
                 >
                     <div class="grid gap-5 sm:grid-cols-2">
-                        <SelectField
+                        <SearchSelectField
                             id="remitente"
                             v-model="form.cliente_remitente_id"
                             label="Remitente"
-                            placeholder="Selecciona un cliente"
+                            placeholder="Busca o selecciona un cliente"
                             :groups="gruposClientes"
                             required
                             :error="form.errors.cliente_remitente_id"
                         />
-                        <SelectField
+                        <SearchSelectField
                             id="destinatario"
                             v-model="form.cliente_destinatario_id"
                             label="Destinatario"
-                            placeholder="Selecciona un cliente"
+                            placeholder="Busca o selecciona un cliente"
                             :groups="gruposClientes"
                             required
                             :error="form.errors.cliente_destinatario_id"

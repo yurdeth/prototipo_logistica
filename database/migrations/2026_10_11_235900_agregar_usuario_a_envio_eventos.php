@@ -26,9 +26,9 @@ return new class extends Migration
 
     public function down(): void
     {
+        // PostgreSQL elimina junto con la columna su índice y su llave foránea.
+        // (dropIndex sin esquema falla en PostgreSQL con tablas fuera de "public".)
         Schema::table('envios.envio_eventos', function (Blueprint $table) {
-            $table->dropForeign('envio_eventos_usuario_fk');
-            $table->dropIndex('idx_envio_eventos_usuario');
             $table->dropColumn('usuario_id');
         });
     }
