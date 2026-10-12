@@ -64,4 +64,3 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('envios.editar', fn (User $u) => $tieneRol($u, 'admin'));
     }
 }
-

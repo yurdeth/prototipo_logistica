@@ -411,8 +411,8 @@ class EnvioController extends Controller
             coalesce(sum(e.peso_kg), 0) as peso_total,
             count(*) FILTER (WHERE s.nombre_estado IN ('ENTREGADO','DEVUELTO','FALLIDO')) as cerrados,
             count(*) FILTER (WHERE s.nombre_estado = 'ENTREGADO' AND fe.fecha <= e.fecha_comprometida) as a_tiempo,
-            count(*) FILTER (WHERE ".self::ABIERTO." AND e.fecha_comprometida < now()) as vencidos,
-            count(*) FILTER (WHERE ".self::ABIERTO." AND e.fecha_comprometida >= now()
+            count(*) FILTER (WHERE ".self::ABIERTO.' AND e.fecha_comprometida < now()) as vencidos,
+            count(*) FILTER (WHERE '.self::ABIERTO." AND e.fecha_comprometida >= now()
                              AND e.fecha_comprometida < now() + interval '24 hours') as en_riesgo,
             avg(extract(epoch FROM (fe.fecha - e.fecha_registro)) / 3600)
                 FILTER (WHERE s.nombre_estado = 'ENTREGADO' AND fe.fecha IS NOT NULL) as horas_promedio,

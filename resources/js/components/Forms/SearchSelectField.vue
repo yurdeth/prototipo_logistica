@@ -51,7 +51,9 @@ const estilo = computed(() => ({
     position: 'fixed' as const,
     left: `${caja.left}px`,
     width: `${caja.width}px`,
-    ...(caja.arriba ? { bottom: `${caja.bottom}px` } : { top: `${caja.top}px` }),
+    ...(caja.arriba
+        ? { bottom: `${caja.bottom}px` }
+        : { top: `${caja.top}px` }),
 }));
 
 // Mientras está abierta, la lista sigue al campo si se hace scroll o cambia el tamaño.
@@ -77,7 +79,10 @@ onBeforeUnmount(() => {
 
 // Busca sin distinguir mayúsculas ni acentos ("maria" encuentra "María").
 const normalizar = (t: string) =>
-    t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    t
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
 
 const grupos = computed(
     () => props.groups ?? [{ label: '', options: props.options ?? [] }],
@@ -163,7 +168,10 @@ const alTecla = (e: KeyboardEvent) => {
 watch(activo, async () => {
     await nextTick();
     const o = planos.value[activo.value];
-    if (o) document.getElementById(idOpcion(o))?.scrollIntoView({ block: 'nearest' });
+    if (o)
+        document
+            .getElementById(idOpcion(o))
+            ?.scrollIntoView({ block: 'nearest' });
 });
 </script>
 
@@ -190,7 +198,9 @@ watch(activo, async () => {
                 :aria-expanded="abierto"
                 :aria-controls="`${id}-lista`"
                 :aria-activedescendant="
-                    abierto && planos[activo] ? idOpcion(planos[activo]) : undefined
+                    abierto && planos[activo]
+                        ? idOpcion(planos[activo])
+                        : undefined
                 "
                 aria-autocomplete="list"
                 :class="[inputClase, 'pr-9']"
@@ -208,51 +218,59 @@ watch(activo, async () => {
                 stroke-width="1.5"
                 aria-hidden="true"
             >
-                <path d="m6 8 4 4 4-4" stroke-linecap="round" stroke-linejoin="round" />
+                <path
+                    d="m6 8 4 4 4-4"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                />
             </svg>
 
             <Teleport to="body">
-            <ul
-                v-show="abierto"
-                :id="`${id}-lista`"
-                role="listbox"
-                :style="estilo"
-                class="z-[60] max-h-60 overflow-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg"
-            >
-                <template v-for="g in filtrados" :key="g.label">
-                    <li
-                        v-if="g.label"
-                        role="presentation"
-                        class="px-3 pt-2 pb-1 text-xs font-semibold tracking-wide text-slate-500 uppercase"
-                    >
-                        {{ g.label }}
-                    </li>
-
-                    <li
-                        v-for="o in g.options"
-                        :id="idOpcion(o)"
-                        :key="o.id"
-                        role="option"
-                        :aria-selected="o.id === model"
-                        class="cursor-pointer px-3 py-2 text-sm text-slate-700"
-                        :class="[
-                            planos[activo]?.id === o.id ? 'bg-blue-50' : '',
-                            o.id === model ? 'font-medium text-slate-900' : '',
-                        ]"
-                        @mousedown.prevent="elegir(o)"
-                        @mouseenter="activo = planos.findIndex((p) => p.id === o.id)"
-                    >
-                        {{ etiqueta(o) }}
-                    </li>
-                </template>
-
-                <li
-                    v-if="planos.length === 0"
-                    class="px-3 py-2 text-sm text-slate-500"
+                <ul
+                    v-show="abierto"
+                    :id="`${id}-lista`"
+                    role="listbox"
+                    :style="estilo"
+                    class="z-[60] max-h-60 overflow-auto rounded-md border border-slate-200 bg-white py-1 shadow-lg"
                 >
-                    Sin resultados para "{{ consulta }}".
-                </li>
-            </ul>
+                    <template v-for="g in filtrados" :key="g.label">
+                        <li
+                            v-if="g.label"
+                            role="presentation"
+                            class="px-3 pt-2 pb-1 text-xs font-semibold tracking-wide text-slate-500 uppercase"
+                        >
+                            {{ g.label }}
+                        </li>
+
+                        <li
+                            v-for="o in g.options"
+                            :id="idOpcion(o)"
+                            :key="o.id"
+                            role="option"
+                            :aria-selected="o.id === model"
+                            class="cursor-pointer px-3 py-2 text-sm text-slate-700"
+                            :class="[
+                                planos[activo]?.id === o.id ? 'bg-blue-50' : '',
+                                o.id === model
+                                    ? 'font-medium text-slate-900'
+                                    : '',
+                            ]"
+                            @mousedown.prevent="elegir(o)"
+                            @mouseenter="
+                                activo = planos.findIndex((p) => p.id === o.id)
+                            "
+                        >
+                            {{ etiqueta(o) }}
+                        </li>
+                    </template>
+
+                    <li
+                        v-if="planos.length === 0"
+                        class="px-3 py-2 text-sm text-slate-500"
+                    >
+                        Sin resultados para "{{ consulta }}".
+                    </li>
+                </ul>
             </Teleport>
         </div>
     </FormField>

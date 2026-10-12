@@ -63,27 +63,44 @@ const esAlerta = computed(() => ['vencido', 'en_riesgo'].includes(sla.value));
 
 const personas = computed<Field[]>(() => [
     { label: 'Remitente', value: props.envio.remitente, weight: 'medium' },
-    { label: 'Destinatario', value: props.envio.destinatario, weight: 'medium' },
+    {
+        label: 'Destinatario',
+        value: props.envio.destinatario,
+        weight: 'medium',
+    },
 ]);
 
 const logistica = computed<Field[]>(() => [
     { label: 'Sucursal de origen', value: props.envio.sucursal_origen },
     { label: 'Destino', value: props.envio.territorio_destino },
-    { label: 'Dirección de entrega', value: props.envio.direccion_destino, wide: true },
+    {
+        label: 'Dirección de entrega',
+        value: props.envio.direccion_destino,
+        wide: true,
+    },
 ]);
 
 const especificaciones = computed<Field[]>(() => [
-    { label: 'Peso', value: `${props.envio.peso_kg.toFixed(2)} kg`, weight: 'semibold' },
+    {
+        label: 'Peso',
+        value: `${props.envio.peso_kg.toFixed(2)} kg`,
+        weight: 'semibold',
+    },
     {
         label: 'Volumen',
         value: props.envio.volumen_m3 ? `${props.envio.volumen_m3} m³` : '—',
         weight: 'semibold',
     },
     { label: 'Fecha de registro', value: fmtFecha(props.envio.fecha_registro) },
-    { label: 'Fecha compromiso', value: fmtFecha(props.envio.fecha_comprometida) },
+    {
+        label: 'Fecha compromiso',
+        value: fmtFecha(props.envio.fecha_comprometida),
+    },
     {
         label: 'Fecha de entrega',
-        value: props.envio.fecha_entrega ? fmtFecha(props.envio.fecha_entrega) : '—',
+        value: props.envio.fecha_entrega
+            ? fmtFecha(props.envio.fecha_entrega)
+            : '—',
     },
 ]);
 
@@ -166,7 +183,8 @@ const cambiarEstado = () => {
             <span
                 class="rounded-lg border border-sidebar-border/70 bg-card px-3 py-2 text-sm text-foreground"
             >
-                Prioridad {{ prioridadInfo[envio.prioridad].label.toLowerCase() }}
+                Prioridad
+                {{ prioridadInfo[envio.prioridad].label.toLowerCase() }}
             </span>
             <BiBadge
                 v-if="esAlerta"
@@ -179,16 +197,25 @@ const cambiarEstado = () => {
         <section
             class="space-y-5 rounded-xl border border-sidebar-border/70 bg-card p-4 shadow-sm sm:p-5"
         >
-            <BiFields title="Información general" :fields="personas" responsive />
+            <BiFields
+                title="Información general"
+                :fields="personas"
+                responsive
+            />
             <BiFields title="Información logística" :fields="logistica" />
-            <BiFields title="Especificaciones y fechas" :fields="especificaciones" />
+            <BiFields
+                title="Especificaciones y fechas"
+                :fields="especificaciones"
+            />
         </section>
 
         <section
             v-if="permisos.editar"
             class="rounded-xl border border-sidebar-border/70 bg-card p-4 shadow-sm sm:p-5"
         >
-            <h2 class="text-sm font-semibold text-foreground">Cambiar estado</h2>
+            <h2 class="text-sm font-semibold text-foreground">
+                Cambiar estado
+            </h2>
             <p class="mt-1 text-sm text-muted-foreground">
                 Cada cambio queda registrado en el historial con tu usuario, la
                 fecha y la ubicación si la indicas.
@@ -252,10 +279,16 @@ const cambiarEstado = () => {
                 <div class="sm:col-span-2">
                     <button
                         type="submit"
-                        :disabled="form.processing || form.estado === envio.estado"
+                        :disabled="
+                            form.processing || form.estado === envio.estado
+                        "
                         class="inline-flex h-10 items-center rounded-md bg-blue-700 px-4 text-sm font-semibold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                        {{ form.processing ? 'Guardando...' : 'Registrar cambio' }}
+                        {{
+                            form.processing
+                                ? 'Guardando...'
+                                : 'Registrar cambio'
+                        }}
                     </button>
                 </div>
             </form>

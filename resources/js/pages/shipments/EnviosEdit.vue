@@ -48,7 +48,9 @@ defineOptions({
 
 const form = useForm({
     cliente_remitente_id: props.envio.cliente_remitente_id as number | null,
-    cliente_destinatario_id: props.envio.cliente_destinatario_id as number | null,
+    cliente_destinatario_id: props.envio.cliente_destinatario_id as
+        | number
+        | null,
     sucursal_origen_id: props.envio.sucursal_origen_id as number | null,
     territorio_destino_id: props.envio.territorio_destino_id as number | null,
     direccion_destino: props.envio.direccion_destino,

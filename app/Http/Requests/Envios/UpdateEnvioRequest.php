@@ -2,8 +2,8 @@
 
 namespace App\Http\Requests\Envios;
 
-use App\Http\Controllers\Envios\EnvioController;
 use App\Concerns\Envios\ReglasEnvio;
+use App\Http\Controllers\Envios\EnvioController;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;

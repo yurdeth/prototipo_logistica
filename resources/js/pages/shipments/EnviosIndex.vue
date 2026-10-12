@@ -83,7 +83,12 @@ interface Resumen {
     };
     embudo: { estado: Estado; total: number }[];
     prioridad: { prioridad: Prioridad; total: number; criticos: number }[];
-    destinos: { id: number; destino: string; total: number; incidencias: number }[];
+    destinos: {
+        id: number;
+        destino: string;
+        total: number;
+        incidencias: number;
+    }[];
     tendencia: { label: string; total: number; incidencias: number }[];
 }
 
@@ -294,18 +299,35 @@ const chips = computed<Chip[]>(() =>
 const activos = computed<Activo[]>(() => {
     const lista: Activo[] = [];
 
-    if (f.estado) lista.push({ key: 'estado', label: `Estado: ${estadoInfo[f.estado].label}` });
-    if (f.prioridad) lista.push({ key: 'prioridad', label: `Prioridad: ${prioridadInfo[f.prioridad].label}` });
+    if (f.estado)
+        lista.push({
+            key: 'estado',
+            label: `Estado: ${estadoInfo[f.estado].label}`,
+        });
+    if (f.prioridad)
+        lista.push({
+            key: 'prioridad',
+            label: `Prioridad: ${prioridadInfo[f.prioridad].label}`,
+        });
     if (f.destino) {
         const t = props.catalogos.territorios.find((x) => x.id === f.destino);
-        lista.push({ key: 'destino', label: `Destino: ${t?.nombre ?? f.destino}` });
+        lista.push({
+            key: 'destino',
+            label: `Destino: ${t?.nombre ?? f.destino}`,
+        });
     }
     if (f.sucursal) {
         const s = props.catalogos.sucursales.find((x) => x.id === f.sucursal);
-        lista.push({ key: 'sucursal', label: `Sucursal: ${s?.nombre ?? f.sucursal}` });
+        lista.push({
+            key: 'sucursal',
+            label: `Sucursal: ${s?.nombre ?? f.sucursal}`,
+        });
     }
     if (f.desde || f.hasta) {
-        lista.push({ key: 'fechas', label: `Fechas: ${f.desde ?? '…'} a ${f.hasta ?? '…'}` });
+        lista.push({
+            key: 'fechas',
+            label: `Fechas: ${f.desde ?? '…'} a ${f.hasta ?? '…'}`,
+        });
     }
     if (f.alerta) lista.push({ key: 'alerta', label: 'Solo con alerta' });
 
@@ -350,7 +372,9 @@ const leyendaTendencia = [
     { label: 'Con incidencia', color: colors.rojo },
 ];
 
-const maxDia = computed(() => Math.max(1, ...props.resumen.tendencia.map((d) => d.total)));
+const maxDia = computed(() =>
+    Math.max(1, ...props.resumen.tendencia.map((d) => d.total)),
+);
 
 const filasPrioridad = computed<BarRow[]>(() => {
     const suma = props.resumen.prioridad.reduce((a, p) => a + p.total, 0) || 1;
@@ -383,7 +407,9 @@ const filasDestino = computed<BarRow[]>(() => {
     });
 });
 
-const tasaFallo = computed(() => (k.value.total ? (k.value.fallos / k.value.total) * 100 : 0));
+const tasaFallo = computed(() =>
+    k.value.total ? (k.value.fallos / k.value.total) * 100 : 0,
+);
 
 const campoClase =
     'h-10 rounded-lg border border-sidebar-border/70 bg-card px-3 text-sm text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none';
@@ -448,7 +474,12 @@ const campoClase =
                             type="date"
                             :class="campoClase"
                             :value="f.desde ?? ''"
-                            @change="cambiarRango('desde', ($event.target as HTMLInputElement).value)"
+                            @change="
+                                cambiarRango(
+                                    'desde',
+                                    ($event.target as HTMLInputElement).value,
+                                )
+                            "
                         />
                     </label>
 
@@ -461,13 +492,17 @@ const campoClase =
                             :class="campoClase"
                             :value="f.hasta ?? ''"
                             :min="f.desde ?? undefined"
-                            @change="cambiarRango('hasta', ($event.target as HTMLInputElement).value)"
+                            @change="
+                                cambiarRango(
+                                    'hasta',
+                                    ($event.target as HTMLInputElement).value,
+                                )
+                            "
                         />
                     </label>
                 </template>
 
                 <BiChips :items="chips" :active="f.estado" @toggle="alEstado" />
-
             </BiFilters>
 
             <BiTable
@@ -484,11 +519,15 @@ const campoClase =
                         class="px-5 py-4"
                         :style="
                             esAlerta(slaDe(e))
-                                ? { boxShadow: `inset 3px 0 0 ${slaInfo[slaDe(e)].color}` }
+                                ? {
+                                      boxShadow: `inset 3px 0 0 ${slaInfo[slaDe(e)].color}`,
+                                  }
                                 : undefined
                         "
                     >
-                        <p class="font-mono text-sm font-medium text-foreground">
+                        <p
+                            class="font-mono text-sm font-medium text-foreground"
+                        >
                             {{ e.codigo_guia }}
                         </p>
                         <p class="mt-1 text-xs text-muted-foreground">
@@ -508,7 +547,9 @@ const campoClase =
                         />
                     </td>
 
-                    <td class="px-5 py-4 whitespace-nowrap text-muted-foreground">
+                    <td
+                        class="px-5 py-4 whitespace-nowrap text-muted-foreground"
+                    >
                         {{ fmtFecha(e.fecha_comprometida) }}
                     </td>
 
@@ -568,9 +609,10 @@ const campoClase =
                         class="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-2"
                         :title="`${b.label}: ${b.total} envíos, ${b.incidencias} con incidencia`"
                     >
-                        <span class="text-xs font-medium text-muted-foreground">{{
-                            b.total || ''
-                        }}</span>
+                        <span
+                            class="text-xs font-medium text-muted-foreground"
+                            >{{ b.total || '' }}</span
+                        >
 
                         <div
                             class="flex w-full max-w-8 flex-col-reverse overflow-hidden rounded-t-md"
