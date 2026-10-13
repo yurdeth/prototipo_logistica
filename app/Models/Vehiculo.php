@@ -2,9 +2,11 @@
 
 namespace App\Models;
 
+use Database\Factories\VehiculoFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -32,6 +34,9 @@ use Illuminate\Support\Carbon;
 #[Fillable(['placa', 'tipo_vehiculo_id', 'estado_vehiculo_id', 'sucursal_id', 'marca', 'modelo', 'anio', 'consumo_km_gal'])]
 class Vehiculo extends Model
 {
+    /** @use HasFactory<VehiculoFactory> */
+    use HasFactory;
+
     protected $primaryKey = 'id_vehiculo';
 
     /**

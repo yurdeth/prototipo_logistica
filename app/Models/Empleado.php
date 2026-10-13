@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
+use Database\Factories\EmpleadoFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Table;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -28,6 +30,9 @@ use Illuminate\Support\Carbon;
 #[Fillable(['usuario_id', 'puesto_id', 'sucursal_id', 'nombres', 'apellidos', 'documento_identidad', 'telefono', 'numero_licencia', 'fecha_contratacion', 'activo'])]
 class Empleado extends Model
 {
+    /** @use HasFactory<EmpleadoFactory> */
+    use HasFactory;
+
     protected $primaryKey = 'id_empleado';
 
     // TODO(conductor): vincular con Despacho (un empleado con numero_licencia conduce despachos; despacho.empleado_id) cuando exista el modelo

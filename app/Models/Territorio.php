@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
+use Database\Factories\TerritorioFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Table;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
@@ -19,6 +21,9 @@ use Illuminate\Support\Carbon;
 #[Fillable(['nombre_territorio', 'tipo_territorio', 'territorio_padre_id'])]
 class Territorio extends Model
 {
+    /** @use HasFactory<TerritorioFactory> */
+    use HasFactory;
+
     protected $primaryKey = 'id_territorio';
 
     // la tabla solo tiene created_at

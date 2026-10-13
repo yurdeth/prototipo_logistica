@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
+use Database\Factories\SucursalFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Table;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -26,6 +28,9 @@ use Illuminate\Support\Carbon;
 #[Fillable(['codigo', 'nombre_sucursal', 'territorio_id', 'direccion', 'latitud', 'longitud', 'telefono', 'activa'])]
 class Sucursal extends Model
 {
+    /** @use HasFactory<SucursalFactory> */
+    use HasFactory;
+
     protected $primaryKey = 'id_sucursal';
 
     /**
