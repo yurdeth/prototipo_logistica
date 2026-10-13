@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Envios;
 
+use App\Enums\EstadoEnvioEnum;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Envios\CambiarEstadoEnvioRequest;
 use App\Http\Requests\Envios\StoreEnvioRequest;
@@ -20,8 +21,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class EnvioController extends Controller
 {
-    /** Pública: la usa UpdateEnvioRequest como única fuente de verdad de los estados. */
-    public const ESTADOS = ['REGISTRADO', 'RECOLECTADO', 'EN_TRANSITO', 'EN_CENTRO', 'EN_RUTA', 'ENTREGADO', 'DEVUELTO', 'FALLIDO'];
+    /** Fuente de verdad de los estados: el enum que espeja el catálogo. */
+    public const ESTADOS = EstadoEnvioEnum::VALUES;
 
     /** Fragmentos SQL reutilizados en los indicadores (e = envio, s = estado, fe.fecha = fecha real de entrega). */
     public const ABIERTO = "s.nombre_estado NOT IN ('ENTREGADO','DEVUELTO','FALLIDO')";
@@ -160,7 +161,7 @@ class EnvioController extends Controller
             'territorio_destino_id' => $data['territorio_destino_id'],
             'peso_kg' => $data['peso_kg'],
             'volumen_m3' => $data['volumen_m3'] ?? null,
-            'estado_envio_id' => $this->estadoId('REGISTRADO'),
+            'estado_envio_id' => $this->estadoId(EstadoEnvioEnum::REGISTRADO->value),
             'prioridad' => $data['prioridad'],
             'fecha_comprometida' => Carbon::parse($data['fecha_comprometida']),
         ]);

@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Enums\EstadoDespachoEnum;
 use App\Models\EstadoDespacho;
 use Illuminate\Database\Seeder;
 
@@ -9,16 +10,12 @@ class EstadoDespachoSeeder extends Seeder
 {
     /**
      * Catálogo fijo de estados de un despacho; idéntico al que siembra la
-     * migración con insertOrIgnore.
-     *
-     * @var list<string>
+     * migración con insertOrIgnore y al enum EstadoDespachoEnum.
      */
-    private const ESTADOS = ['PLANIFICADO', 'EN_CURSO', 'COMPLETADO'];
-
     public function run(): void
     {
-        foreach (self::ESTADOS as $nombre) {
-            EstadoDespacho::updateOrCreate(['nombre_estado' => $nombre]);
+        foreach (EstadoDespachoEnum::cases() as $estado) {
+            EstadoDespacho::updateOrCreate(['nombre_estado' => $estado->value]);
         }
     }
 }

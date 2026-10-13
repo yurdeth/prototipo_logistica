@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Envios;
 
 use App\Concerns\Envios\ReglasEnvio;
+use App\Enums\EstadoEnvioEnum;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -27,7 +28,7 @@ class StoreEnvioRequest extends FormRequest
             'fecha_comprometida' => ['required', 'date', 'after:now'],
 
             // Un envío nuevo solo puede iniciar en estado REGISTRADO.
-            'estado' => ['nullable', Rule::in(['REGISTRADO'])],
+            'estado' => ['nullable', Rule::in([EstadoEnvioEnum::REGISTRADO->value])],
 
             // Las coordenadas son opcionales, pero deben enviarse ambas.
             'latitud' => ['nullable', 'numeric', 'between:-90,90', 'required_with:longitud'],

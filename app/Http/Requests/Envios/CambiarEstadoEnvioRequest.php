@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Envios;
 
-use App\Http\Controllers\Envios\EnvioController;
+use App\Enums\EstadoEnvioEnum;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -18,7 +18,7 @@ class CambiarEstadoEnvioRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'estado' => ['required', Rule::in(EnvioController::ESTADOS)],
+            'estado' => ['required', Rule::in(EstadoEnvioEnum::valores())],
             'nota' => ['nullable', 'string', 'max:500'],
             'latitud' => ['nullable', 'numeric', 'between:-90,90', 'required_with:longitud'],
             'longitud' => ['nullable', 'numeric', 'between:-180,180', 'required_with:latitud'],

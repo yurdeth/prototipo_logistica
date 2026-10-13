@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Enums\EstadoEnvioEnum;
 use App\Models\EstadoEnvio;
 use Illuminate\Database\Seeder;
 
@@ -9,25 +10,12 @@ class EstadoEnvioSeeder extends Seeder
 {
     /**
      * Catálogo fijo de estados del ciclo de vida de un envío; idéntico al
-     * que siembra la migración con insertOrIgnore.
-     *
-     * @var list<string>
+     * que siembra la migración con insertOrIgnore y al enum EstadoEnvioEnum.
      */
-    private const ESTADOS = [
-        'REGISTRADO',
-        'RECOLECTADO',
-        'EN_TRANSITO',
-        'EN_CENTRO',
-        'EN_RUTA',
-        'ENTREGADO',
-        'DEVUELTO',
-        'FALLIDO',
-    ];
-
     public function run(): void
     {
-        foreach (self::ESTADOS as $nombre) {
-            EstadoEnvio::updateOrCreate(['nombre_estado' => $nombre]);
+        foreach (EstadoEnvioEnum::cases() as $estado) {
+            EstadoEnvio::updateOrCreate(['nombre_estado' => $estado->value]);
         }
     }
 }

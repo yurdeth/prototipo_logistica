@@ -3,7 +3,7 @@
 namespace App\Http\Requests\Envios;
 
 use App\Concerns\Envios\ReglasEnvio;
-use App\Http\Controllers\Envios\EnvioController;
+use App\Enums\EstadoEnvioEnum;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -49,7 +49,7 @@ class UpdateEnvioRequest extends FormRequest
             ],
 
             // El estado es obligatorio y debe pertenecer a los estados permitidos.
-            'estado' => ['required', Rule::in(EnvioController::ESTADOS)],
+            'estado' => ['required', Rule::in(EstadoEnvioEnum::valores())],
 
             // La nota es opcional, debe ser texto y no superar 500 caracteres.
             'nota' => ['nullable', 'string', 'max:500'],
