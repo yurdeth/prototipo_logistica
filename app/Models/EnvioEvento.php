@@ -2,10 +2,12 @@
 
 namespace App\Models;
 
+use Database\Factories\EnvioEventoFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Table;
 use Illuminate\Database\Eloquent\Attributes\WithoutTimestamps;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -21,6 +23,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable(['envio_id', 'estado_envio_id', 'ocurrido_en', 'nota'])]
 class EnvioEvento extends Model
 {
+    /** @use HasFactory<EnvioEventoFactory> */
+    use HasFactory;
+
     protected $primaryKey = 'id_evento';
 
     // la columna ubicacion (geography Point 4326) se escribe via SQL (ST_SetSRID/ST_MakePoint); queda fuera del fillable

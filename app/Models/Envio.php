@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
+use Database\Factories\EnvioFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Table;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -41,6 +43,9 @@ use Illuminate\Support\Str;
 #[Fillable(['codigo_guia', 'cliente_remitente_id', 'cliente_destinatario_id', 'sucursal_origen_id', 'direccion_destino', 'territorio_destino_id', 'peso_kg', 'volumen_m3', 'estado_envio_id', 'prioridad', 'fecha_registro', 'fecha_comprometida'])]
 class Envio extends Model
 {
+    /** @use HasFactory<EnvioFactory> */
+    use HasFactory;
+
     protected $primaryKey = 'id_envio';
 
     /**
