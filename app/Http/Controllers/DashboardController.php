@@ -78,9 +78,11 @@ class DashboardController extends Controller
 
         $mensual = collect(range(0, 5))->map(function (int $i) use ($inicio, $porMes): array {
             $mes = $inicio->copy()->addMonthsNoOverflow($i);
+            // locale() devuelve static|string; se llama por su efecto y se formatea sobre $mes
+            $mes->locale('es');
 
             return [
-                'label' => ucfirst($mes->locale('es')->translatedFormat('M')),
+                'label' => ucfirst($mes->translatedFormat('M')),
                 'total' => (int) ($porMes[$mes->format('Y-m')] ?? 0),
             ];
         })->values();
