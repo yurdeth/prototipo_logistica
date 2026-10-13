@@ -2,7 +2,16 @@
 
 namespace Tests\Feature;
 
-use Database\Seeders\DatabaseSeeder;
+use Database\Seeders\AdminUserSeeder;
+use Database\Seeders\EstadoDespachoSeeder;
+use Database\Seeders\EstadoEnvioSeeder;
+use Database\Seeders\EstadoVehiculoSeeder;
+use Database\Seeders\MarcaVehiculoSeeder;
+use Database\Seeders\ModeloVehiculoSeeder;
+use Database\Seeders\ParametroSeeder;
+use Database\Seeders\RoleSeeder;
+use Database\Seeders\TipoIncidenciaSeeder;
+use Database\Seeders\TipoVehiculoSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -12,15 +21,17 @@ class CatalogosSeederTest extends TestCase
     use RefreshDatabase;
 
     /**
-     * Re-ejecutar el seeder completo no duplica catálogos: el conteo de
+     * Re-ejecutar los seeders de catálogo no duplica filas: el conteo de
      * cada tabla de catálogo debe quedar idéntico tras la segunda pasada.
+     * (Se siembran los catálogos directo: DatabaseSeeder incluye además la
+     * red logística y la historia simulada, que no es idempotente.)
      */
-    public function test_ejecutar_el_seeder_dos_veces_no_duplica_los_catalogos(): void
+    public function test_ejecutar_los_seeders_de_catalogo_dos_veces_no_duplica(): void
     {
-        $this->seed(DatabaseSeeder::class);
+        $this->seedCatalogos();
         $conteoInicial = $this->conteoCatalogos();
 
-        $this->seed(DatabaseSeeder::class);
+        $this->seedCatalogos();
 
         expect($this->conteoCatalogos())->toBe($conteoInicial);
 
@@ -32,6 +43,20 @@ class CatalogosSeederTest extends TestCase
             ->and($conteoInicial['rutas.tipos_incidencias'])->toBe(6)
             ->and($conteoInicial['rutas.parametros'])->toBeGreaterThan(0)
             ->and($conteoInicial['roles'])->toBe(3);
+    }
+
+    private function seedCatalogos(): void
+    {
+        $this->seed(EstadoVehiculoSeeder::class);
+        $this->seed(TipoVehiculoSeeder::class);
+        $this->seed(MarcaVehiculoSeeder::class);
+        $this->seed(ModeloVehiculoSeeder::class);
+        $this->seed(EstadoEnvioSeeder::class);
+        $this->seed(EstadoDespachoSeeder::class);
+        $this->seed(TipoIncidenciaSeeder::class);
+        $this->seed(RoleSeeder::class);
+        $this->seed(ParametroSeeder::class);
+        $this->seed(AdminUserSeeder::class);
     }
 
     /**

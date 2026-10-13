@@ -6,7 +6,9 @@ use App\Enums\EstadoDespachoEnum;
 use App\Enums\EstadoEnvioEnum;
 use App\Enums\TipoIncidenciaEnum;
 use App\Http\Controllers\Envios\EnvioController;
-use Database\Seeders\DatabaseSeeder;
+use Database\Seeders\EstadoDespachoSeeder;
+use Database\Seeders\EstadoEnvioSeeder;
+use Database\Seeders\TipoIncidenciaSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
@@ -21,7 +23,9 @@ class EstadoCatalogoTest extends TestCase
      */
     public function test_los_enums_espejan_los_catalogos_de_la_base(): void
     {
-        $this->seed(DatabaseSeeder::class);
+        $this->seed(EstadoEnvioSeeder::class);
+        $this->seed(EstadoDespachoSeeder::class);
+        $this->seed(TipoIncidenciaSeeder::class);
 
         expect(
             $this->nombres('envios.estados_envios', 'nombre_estado', 'id_estado')
