@@ -7,14 +7,15 @@ use Illuminate\Database\Eloquent\Attributes\Table;
 use Illuminate\Database\Eloquent\Attributes\WithoutTimestamps;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * @property int $id_parada
  * @property int $despacho_id
  * @property int $envio_id
  * @property int $orden
- * @property string|null $hora_estimada
- * @property string|null $hora_real
+ * @property Carbon|null $hora_estimada
+ * @property Carbon|null $hora_real
  */
 #[Table('rutas.despacho_paradas')]
 #[WithoutTimestamps]

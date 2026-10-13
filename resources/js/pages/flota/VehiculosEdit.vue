@@ -535,7 +535,7 @@ const cambiarEstadoFlota = (accion: 'desactivar' | 'reactivar') => {
                             :error="form.errors.consumo_km_gal"
                         >
                             <template #hint>
-                                Kilómetros recorridos por litro de combustible.
+                                Kilómetros recorridos por galón de combustible.
                             </template>
                         </InputField>
                     </div>

@@ -62,5 +62,6 @@ class AppServiceProvider extends ServiceProvider
 
         Gate::define('envios.registrar', fn (User $u) => $tieneRol($u, 'admin', 'operador'));
         Gate::define('envios.editar', fn (User $u) => $tieneRol($u, 'admin'));
+        Gate::define('despachos.gestionar', fn (User $u) => $tieneRol($u, 'admin', 'operador'));
     }
 }

@@ -4,6 +4,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Envios\EnvioController;
 use App\Http\Controllers\Flota\VehiculoController;
 use App\Http\Controllers\Personal\EmpleadoController;
+use App\Http\Controllers\Rutas\DespachoController;
 use Illuminate\Support\Facades\Route;
 
 Route::inertia('/', 'Welcome')->name('home');
@@ -32,13 +33,18 @@ Route::middleware(['auth'])->group(function () {
         Route::get('{envio}', [EnvioController::class, 'show'])->whereNumber('envio')->name('show');
     });
 
-    /*  Rutas provisionales para diseño de interfaces
+    /*  Rutas de despachos: listado y programación con el controlador real
         --------------------------------------------------------------------------
-        Estas rutas se definen temporalmente mediante Route::inertia()
-        para visualizar y desarrollar las interfaces del sistema.
+        La red logística (conexiones) la alimenta RedLogisticaSeeder.
     */
-    Route::inertia('rutas', 'rutas/RutasIndex')->name('rutas');
-    Route::inertia('rutas/crear', 'rutas/RutasCreate')->name('rutas.create');
+    Route::prefix('rutas')->name('rutas.')->group(function () {
+        Route::get('/', [DespachoController::class, 'index'])->name('index');
+
+        Route::middleware('can:despachos.gestionar')->group(function () {
+            Route::get('crear', [DespachoController::class, 'create'])->name('create');
+            Route::post('/', [DespachoController::class, 'store'])->name('store');
+        });
+    });
 
     // Flota: vistas y operaciones (sin API; todo por Inertia)
     Route::prefix('vehiculos')->name('vehiculos.')->group(function (): void {

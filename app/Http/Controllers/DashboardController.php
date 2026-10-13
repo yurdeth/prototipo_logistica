@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Envios\EnvioController;
+use App\Http\Controllers\Rutas\DespachoController;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Carbon;
@@ -147,6 +148,10 @@ class DashboardController extends Controller
                 ->values(),
             'recientes' => $recientes,
             'permisos' => ['registrar' => Gate::allows('envios.registrar')],
+
+            // Pestaña analítica de rutas: mismos shapes que RutasIndex
+            'despachos' => DespachoController::paraPanel(),
+            'conexiones' => DespachoController::conexiones(),
         ]);
     }
 

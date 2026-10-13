@@ -14,7 +14,7 @@ use Illuminate\Support\Carbon;
  * @property int $sucursal_origen_id
  * @property int $conductor_empleado_id
  * @property int $vehiculo_id
- * @property string $fecha
+ * @property Carbon $fecha
  * @property int $estado_despacho_id
  * @property string|null $km_planificados
  * @property string|null $km_recorridos

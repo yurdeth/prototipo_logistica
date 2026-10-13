@@ -15,7 +15,8 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { dashboard, rutas } from '@/routes';
+import { dashboard } from '@/routes';
+import { index as rutasRuta } from '@/routes/rutas';
 import { index as empleadosRuta } from '@/routes/empleados';
 import { index as enviosRuta } from '@/routes/envios';
 import { index as vehiculosRuta } from '@/routes/vehiculos';
@@ -28,7 +29,7 @@ const mainNavItems: NavItem[] = [
         icon: LayoutGrid,
     },
     { title: 'Envíos', href: enviosRuta(), icon: Package },
-    { title: 'Rutas', href: rutas(), icon: Route },
+    { title: 'Rutas', href: rutasRuta(), icon: Route },
     { title: 'Empleados', href: empleadosRuta(), icon: Users },
     { title: 'Vehículos', href: vehiculosRuta(), icon: Truck },
     { title: 'Clientes', href: '#', icon: Building2 },
