@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Envios\EnvioController;
 use App\Http\Controllers\Flota\VehiculoController;
 use App\Http\Controllers\Personal\EmpleadoController;
@@ -11,7 +12,7 @@ Route::inertia('/', 'Welcome')->name('home');
 Route::redirect('email/verify/{any?}', '/dashboard')->where('any', '.*');
 
 Route::middleware(['auth'])->group(function () {
-    Route::inertia('dashboard', 'Dashboard')->name('dashboard');
+    Route::get('dashboard', DashboardController::class)->name('dashboard');
 
     Route::prefix('envios')->name('envios.')->group(function () {
         Route::get('/', [EnvioController::class, 'index'])->name('index');

@@ -9,6 +9,7 @@ export interface Stat {
     value: string | number;
     hint?: string;
     color?: string;
+    accentColor?: string;
 }
 
 export interface BarRow {

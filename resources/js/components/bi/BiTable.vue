@@ -10,10 +10,12 @@ withDefaults(
         vacio?: boolean;
         emptyTitle?: string;
         emptyHint?: string;
+        variant?: 'default' | 'dashboard';
     }>(),
     {
         emptyTitle: 'No se encontraron resultados',
         emptyHint: 'Prueba modificar o eliminar alguno de los filtros.',
+        variant: 'default',
     },
 );
 defineEmits<{ sort: [key: string] }>();
@@ -21,8 +23,13 @@ defineEmits<{ sort: [key: string] }>();
 
 <template>
     <div class="overflow-x-auto">
-        <table class="w-full text-left text-sm">
-            <thead class="bg-muted/40">
+        <table
+            class="w-full text-left text-sm"
+            :class="variant === 'dashboard' ? 'min-w-[780px]' : ''"
+        >
+            <thead
+                :class="variant === 'dashboard' ? 'bg-muted/30' : 'bg-muted/40'"
+            >
                 <tr
                     class="border-b border-sidebar-border/70 text-xs tracking-wide text-muted-foreground uppercase"
                 >
@@ -30,7 +37,12 @@ defineEmits<{ sort: [key: string] }>();
                         v-for="c in columns"
                         :key="c.label"
                         class="px-5 py-3.5 font-semibold"
-                        :class="c.clase"
+                        :class="[
+                            c.clase,
+                            variant === 'dashboard'
+                                ? 'py-4 text-[11px] tracking-[0.12em]'
+                                : '',
+                        ]"
                     >
                         <!-- Las columnas con `key` se pueden ordenar. -->
                         <button

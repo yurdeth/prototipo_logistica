@@ -24,9 +24,9 @@ class EnvioController extends Controller
     public const ESTADOS = ['REGISTRADO', 'RECOLECTADO', 'EN_TRANSITO', 'EN_CENTRO', 'EN_RUTA', 'ENTREGADO', 'DEVUELTO', 'FALLIDO'];
 
     /** Fragmentos SQL reutilizados en los indicadores (e = envio, s = estado, fe.fecha = fecha real de entrega). */
-    private const ABIERTO = "s.nombre_estado NOT IN ('ENTREGADO','DEVUELTO','FALLIDO')";
+    public const ABIERTO = "s.nombre_estado NOT IN ('ENTREGADO','DEVUELTO','FALLIDO')";
 
-    private const INCIDENCIA = "(s.nombre_estado IN ('FALLIDO','DEVUELTO')
+    public const INCIDENCIA = "(s.nombre_estado IN ('FALLIDO','DEVUELTO')
         OR (s.nombre_estado NOT IN ('ENTREGADO','DEVUELTO','FALLIDO') AND e.fecha_comprometida < now())
         OR (s.nombre_estado = 'ENTREGADO' AND fe.fecha > e.fecha_comprometida))";
 
