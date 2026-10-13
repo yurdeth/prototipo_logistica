@@ -7,6 +7,8 @@ use App\Models\Puesto;
 use App\Models\Sucursal;
 use App\Models\Vehiculo;
 use Database\Factories\SucursalFactory;
+use Database\Seeders\MarcaVehiculoSeeder;
+use Database\Seeders\ModeloVehiculoSeeder;
 use Database\Seeders\TipoVehiculoSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -82,5 +84,22 @@ class FactoryIntegridadTest extends TestCase
                 fn ($e) => $e->puesto->nombre_puesto === 'Conductor'
                     && Puesto::query()->whereKey($e->puesto_id)->where('activo', true)->exists()
             ))->toBeTrue();
+    }
+
+    /**
+     * Con el catálogo marca/modelo sembrado, cada vehículo generado lleva su
+     * fila en la pivote: sin ella, la vista de edición lo muestra "Sin asignar".
+     */
+    public function test_los_vehiculos_llevan_su_marca_modelo_en_la_pivote(): void
+    {
+        $this->seed(TipoVehiculoSeeder::class);
+        $this->seed(MarcaVehiculoSeeder::class);
+        $this->seed(ModeloVehiculoSeeder::class);
+
+        Vehiculo::factory()->count(6)->create();
+
+        $sinPivote = Vehiculo::query()->doesntHave('modelos')->count();
+
+        expect($sinPivote)->toBe(0);
     }
 }
