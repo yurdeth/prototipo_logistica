@@ -25,10 +25,11 @@ return new class extends Migration
     public function down(): void
     {
         DB::statement('ALTER TABLE flota.vehiculos DROP CONSTRAINT IF EXISTS chk_consumo_km_gal_vehiculos');
-        DB::statement('ALTER TABLE flota.vehiculos ADD CONSTRAINT chk_consumo_km_l_vehiculos CHECK (consumo_km_l > 0)');
 
         Schema::table('flota.vehiculos', function (Blueprint $table) {
             $table->renameColumn('consumo_km_gal', 'consumo_km_l');
         });
+
+        DB::statement('ALTER TABLE flota.vehiculos ADD CONSTRAINT chk_consumo_km_l_vehiculos CHECK (consumo_km_l > 0)');
     }
 };
