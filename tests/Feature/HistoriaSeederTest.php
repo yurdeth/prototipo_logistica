@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Cliente;
 use App\Models\Parametro;
 use Database\Seeders\HistoriaSeeder;
 use Database\Seeders\RedLogisticaSeeder;
@@ -61,6 +62,9 @@ class HistoriaSeederTest extends TestCase
             ->and($conKilometros)->toBeGreaterThan(0)
             ->and($despachosConRecursos)->toBeGreaterThan(0)
             ->and($conParadas)->toBe($despachosConRecursos);
+
+        // Censo de clientes variado: sin él, remitente y destinatario son siempre el mismo
+        expect(Cliente::count())->toBeGreaterThanOrEqual(32);
     }
 
     /** El día congestionado existe y es visible: su tramo queda versionado y sus incidencias registradas. */

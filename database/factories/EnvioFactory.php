@@ -58,9 +58,13 @@ class EnvioFactory extends Factory
         // Peso según lo que cabe en la flota: desde documentos hasta paquetes de bodega
         $peso = fake()->randomFloat(2, 0.5, fake()->randomElement([15, 60, 300, 800]));
 
+        // Un paquete rara vez viaja de alguien a sí mismo: si hay más de un
+        // cliente, destinatario y remitente difieren.
+        $remitente = ClienteFactory::existente();
+
         return [
-            'cliente_remitente_id' => ClienteFactory::existente()->id_cliente,
-            'cliente_destinatario_id' => ClienteFactory::existente()->id_cliente,
+            'cliente_remitente_id' => $remitente->id_cliente,
+            'cliente_destinatario_id' => ClienteFactory::distintoDe($remitente)->id_cliente,
             'sucursal_origen_id' => (Sucursal::query()->inRandomOrder()->first() ?? Sucursal::factory()->create())->id_sucursal,
             'direccion_destino' => fake()->streetAddress().', '.fake()->city(),
             'territorio_destino_id' => TerritorioFactory::departamento(fake()->randomElement(TerritorioFactory::DEPARTAMENTOS))->id_territorio,

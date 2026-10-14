@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Enums\TipoIncidenciaEnum;
+use App\Models\Cliente;
 use App\Models\Empleado;
 use App\Models\Envio;
 use App\Models\Parametro;
@@ -23,6 +24,9 @@ use Illuminate\Support\Facades\DB;
 class HistoriaSeeder extends Seeder
 {
     /** Volumen por defecto de la demo. */
+    /** Censo mínimo de clientes: remitentes y destinatarios variados. */
+    private const CLIENTES_MIN = 32;
+
     private const DIAS = 45;
 
     private const ENVIO_MIN = 20;
@@ -195,9 +199,15 @@ class HistoriaSeeder extends Seeder
         }
     }
 
-    /** Vehículos y conductores para los despachos, solo si la base está vacía. */
+    /** Recursos mínimos para la simulación, solo si la base está vacía. */
     private function asegurarFlotaYPersonal(): void
     {
+        // Un censo bajo de clientes hace que remitente y destinatario sean
+        // siempre los mismos; el demo necesita variedad de nombres.
+        if (Cliente::query()->count() < self::CLIENTES_MIN) {
+            Cliente::factory()->count(self::CLIENTES_MIN - Cliente::query()->count())->create();
+        }
+
         if (Vehiculo::query()->count() === 0) {
             Vehiculo::factory()->count(18)->create();
         }

@@ -51,4 +51,15 @@ class ClienteFactory extends Factory
     {
         return Cliente::query()->inRandomOrder()->first() ?? Cliente::factory()->create();
     }
+
+    /** Cliente distinto del dado (mismo pool si hay variedad, uno nuevo si no). */
+    public static function distintoDe(Cliente $cliente): Cliente
+    {
+        $otro = Cliente::query()
+            ->where('id_cliente', '!=', $cliente->id_cliente)
+            ->inRandomOrder()
+            ->first();
+
+        return $otro ?? Cliente::factory()->create();
+    }
 }
