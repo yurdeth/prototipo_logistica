@@ -32,6 +32,7 @@ class DatabaseSeeder extends Seeder
 
         /* ── 2. Red logística e historia operativa ── */
         $this->call(AdminUserSeeder::class);
+        $this->call(UsuariosRolSeeder::class);
         $this->call(RedLogisticaSeeder::class);
         $this->call(HistoriaSeeder::class);
 
