@@ -18,12 +18,14 @@ import {
     aInputLocal,
     esPositivo,
     fmtNumero,
+    inputClase,
     soft,
     type Aviso,
 } from '@/lib/formularios';
 import { useChecklist } from '@/composables/useChecklist';
 import FormPage from '@/components/Forms/FormPage.vue';
 import FormSection from '@/components/Forms/FormSection.vue';
+import FormField from '@/components/Forms/FormField.vue';
 import StatCard from '@/components/Forms/StatCard.vue';
 import SelectField from '@/components/Forms/SelectField.vue';
 import SearchSelectField from '@/components/Forms/SearchSelectField.vue';
@@ -72,18 +74,66 @@ const form = useForm({
     fecha_comprometida: '',
 });
 
+type TipoCliente = ClienteOpcion['tipo_cliente'];
+type FiltroTipoCliente = 'TODOS' | TipoCliente;
+
 const prioridades = Object.keys(prioridadInfo) as Prioridad[];
 
-const gruposClientes = computed(() => [
-    {
-        label: 'Empresas',
-        options: props.clientes.filter((c) => c.tipo_cliente === 'EMPRESA'),
-    },
-    {
-        label: 'Personas',
-        options: props.clientes.filter((c) => c.tipo_cliente === 'PERSONA'),
-    },
-]);
+const tipoRemitente = ref<FiltroTipoCliente>('TODOS');
+const tipoDestinatario = ref<FiltroTipoCliente>('TODOS');
+
+const gruposDeClientes = (tipo: FiltroTipoCliente) => {
+    const clientes =
+        tipo === 'TODOS'
+            ? props.clientes
+            : props.clientes.filter((cliente) => cliente.tipo_cliente === tipo);
+
+    return [
+        {
+            label: 'Empresas',
+            options: clientes.filter(
+                (cliente) => cliente.tipo_cliente === 'EMPRESA',
+            ),
+        },
+        {
+            label: 'Personas',
+            options: clientes.filter(
+                (cliente) => cliente.tipo_cliente === 'PERSONA',
+            ),
+        },
+    ];
+};
+
+const gruposRemitente = computed(() => gruposDeClientes(tipoRemitente.value));
+const gruposDestinatario = computed(() =>
+    gruposDeClientes(tipoDestinatario.value),
+);
+
+watch(tipoRemitente, (tipo) => {
+    const seleccionado = props.clientes.find(
+        (cliente) => cliente.id === form.cliente_remitente_id,
+    );
+    if (
+        seleccionado &&
+        tipo !== 'TODOS' &&
+        seleccionado.tipo_cliente !== tipo
+    ) {
+        form.cliente_remitente_id = null;
+    }
+});
+
+watch(tipoDestinatario, (tipo) => {
+    const seleccionado = props.clientes.find(
+        (cliente) => cliente.id === form.cliente_destinatario_id,
+    );
+    if (
+        seleccionado &&
+        tipo !== 'TODOS' &&
+        seleccionado.tipo_cliente !== tipo
+    ) {
+        form.cliente_destinatario_id = null;
+    }
+});
 
 /* ───────── Compromiso de entrega ───────── */
 const ahora = ref(Date.now());
@@ -283,24 +333,60 @@ const enviar = () => {
                     description="Quién envía y quién recibe el paquete."
                 >
                     <div class="grid gap-5 sm:grid-cols-2">
-                        <SearchSelectField
-                            id="remitente"
-                            v-model="form.cliente_remitente_id"
-                            label="Remitente"
-                            placeholder="Busca o selecciona un cliente"
-                            :groups="gruposClientes"
-                            required
-                            :error="form.errors.cliente_remitente_id"
-                        />
-                        <SearchSelectField
-                            id="destinatario"
-                            v-model="form.cliente_destinatario_id"
-                            label="Destinatario"
-                            placeholder="Busca o selecciona un cliente"
-                            :groups="gruposClientes"
-                            required
-                            :error="form.errors.cliente_destinatario_id"
-                        />
+                        <div class="space-y-4">
+                            <FormField
+                                id="tipo-remitente"
+                                label="Tipo de remitente"
+                            >
+                                <select
+                                    id="tipo-remitente"
+                                    v-model="tipoRemitente"
+                                    :class="inputClase"
+                                >
+                                    <option value="TODOS">
+                                        Todos los tipos
+                                    </option>
+                                    <option value="PERSONA">Persona</option>
+                                    <option value="EMPRESA">Empresa</option>
+                                </select>
+                            </FormField>
+                            <SearchSelectField
+                                id="remitente"
+                                v-model="form.cliente_remitente_id"
+                                label="Remitente"
+                                placeholder="Busca o selecciona un cliente"
+                                :groups="gruposRemitente"
+                                required
+                                :error="form.errors.cliente_remitente_id"
+                            />
+                        </div>
+                        <div class="space-y-4">
+                            <FormField
+                                id="tipo-destinatario"
+                                label="Tipo de destinatario"
+                            >
+                                <select
+                                    id="tipo-destinatario"
+                                    v-model="tipoDestinatario"
+                                    :class="inputClase"
+                                >
+                                    <option value="TODOS">
+                                        Todos los tipos
+                                    </option>
+                                    <option value="PERSONA">Persona</option>
+                                    <option value="EMPRESA">Empresa</option>
+                                </select>
+                            </FormField>
+                            <SearchSelectField
+                                id="destinatario"
+                                v-model="form.cliente_destinatario_id"
+                                label="Destinatario"
+                                placeholder="Busca o selecciona un cliente"
+                                :groups="gruposDestinatario"
+                                required
+                                :error="form.errors.cliente_destinatario_id"
+                            />
+                        </div>
                     </div>
                 </FormSection>
 
