@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Envios\EnvioController;
-use App\Http\Controllers\Rutas\DespachoController;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Carbon;
@@ -21,11 +20,20 @@ class DashboardController extends Controller
     /** Envíos fallidos o devueltos en los últimos 7 días (siguen visibles como incidencia). */
     private const FALLOS_RECIENTES = "s.nombre_estado IN ('FALLIDO','DEVUELTO') AND e.updated_at >= now() - interval '7 days'";
 
+    private const DIAS_PERIODO_RUTAS = 14;
+
+    private const TOLERANCIA_PARADA_MINUTOS = 15;
+
+    private const LITROS_POR_GALON = 3.785411784;
+
+    private const KG_CO2_POR_LITRO = 2.31;
+
     public function __invoke(): Response
     {
         $ahora = now();
         $hace30 = $ahora->copy()->subDays(30);
         $hace60 = $ahora->copy()->subDays(60);
+        $inicioRutas = $ahora->copy()->startOfDay()->subDays(self::DIAS_PERIODO_RUTAS - 1);
 
         // Envíos por estado actual (todo el historial)
         $porEstado = $this->base()
@@ -149,10 +157,98 @@ class DashboardController extends Controller
             'recientes' => $recientes,
             'permisos' => ['registrar' => Gate::allows('envios.registrar')],
 
-            // Pestaña analítica de rutas: mismos shapes que RutasIndex
-            'despachos' => DespachoController::paraPanel(),
-            'conexiones' => DespachoController::conexiones(),
+            'eficienciaRutas' => $this->eficienciaRutas($inicioRutas),
+            'resumenOperativo' => $this->resumenOperativo($inicioRutas),
         ]);
+    }
+
+    /**
+     * Puntualidad por despacho usando las horas registradas en sus paradas.
+     *
+     * @return array<int, array{codigo: string, pct: float}>
+     */
+    private function eficienciaRutas(CarbonInterface $desde): array
+    {
+        return DB::table('rutas.despachos as d')
+            ->join('rutas.estados_despachos as ed', 'ed.id_estado', '=', 'd.estado_despacho_id')
+            ->join('rutas.despacho_paradas as p', 'p.despacho_id', '=', 'd.id_despacho')
+            ->where('d.fecha', '>=', $desde)
+            ->whereNotNull('p.hora_estimada')
+            ->selectRaw(
+                'd.id_despacho, d.fecha,
+                count(*) FILTER (WHERE p.hora_real IS NOT NULL
+                    OR (ed.nombre_estado = ? AND p.hora_estimada < now() - (? * interval \'1 minute\'))) as evaluadas,
+                count(*) FILTER (WHERE p.hora_real IS NOT NULL
+                    AND p.hora_real <= p.hora_estimada + (? * interval \'1 minute\')) as a_tiempo',
+                ['EN_CURSO', self::TOLERANCIA_PARADA_MINUTOS, self::TOLERANCIA_PARADA_MINUTOS],
+            )
+            ->groupBy('d.id_despacho', 'd.fecha')
+            ->orderByDesc('d.fecha')
+            ->orderByDesc('d.id_despacho')
+            ->get()
+            ->map(fn ($despacho) => [
+                'codigo' => 'DSP-'.str_pad((string) $despacho->id_despacho, 4, '0', STR_PAD_LEFT),
+                'evaluadas' => (int) $despacho->evaluadas,
+                'a_tiempo' => (int) $despacho->a_tiempo,
+            ])
+            ->filter(fn (array $despacho) => $despacho['evaluadas'] > 0)
+            ->take(5)
+            ->map(fn (array $despacho) => [
+                'codigo' => $despacho['codigo'],
+                'pct' => round(($despacho['a_tiempo'] / $despacho['evaluadas']) * 100, 1),
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Indicadores operativos basados en recorridos, paradas y consumo registrados.
+     *
+     * @return array{distancia_km: float|null, tiempo_horas: float|null, combustible_litros: float|null, co2_kg: float|null}
+     */
+    private function resumenOperativo(CarbonInterface $desde): array
+    {
+        $distanciasYCombustible = DB::table('rutas.despachos as d')
+            ->leftJoin('flota.vehiculos as v', 'v.id_vehiculo', '=', 'd.vehiculo_id')
+            ->where('d.fecha', '>=', $desde)
+            ->selectRaw(
+                'sum(d.km_recorridos) as distancia_km,
+                sum((d.km_recorridos / nullif(v.consumo_km_gal, 0)) * ?) FILTER (
+                    WHERE d.km_recorridos IS NOT NULL
+                    AND v.consumo_km_gal IS NOT NULL
+                ) as combustible_litros',
+                [self::LITROS_POR_GALON],
+            )
+            ->first();
+
+        $duracionesDespacho = DB::table('rutas.despacho_paradas as p')
+            ->join('rutas.despachos as d', 'd.id_despacho', '=', 'p.despacho_id')
+            ->where('d.fecha', '>=', $desde)
+            ->whereNotNull('p.hora_real')
+            ->selectRaw('p.despacho_id, count(*) as paradas_registradas, min(p.hora_real) as inicio, max(p.hora_real) as fin')
+            ->groupBy('p.despacho_id');
+
+        $tiempoHoras = DB::query()
+            ->fromSub($duracionesDespacho, 'duraciones')
+            ->where('paradas_registradas', '>=', 2)
+            ->selectRaw('sum(extract(epoch FROM (fin - inicio)) / 3600) as horas')
+            ->value('horas');
+
+        $distanciaKm = $distanciasYCombustible->distancia_km !== null
+            ? (float) $distanciasYCombustible->distancia_km
+            : null;
+        $combustibleLitros = $distanciasYCombustible->combustible_litros !== null
+            ? (float) $distanciasYCombustible->combustible_litros
+            : null;
+
+        return [
+            'distancia_km' => $distanciaKm !== null ? round($distanciaKm, 1) : null,
+            'tiempo_horas' => $tiempoHoras !== null ? round((float) $tiempoHoras, 1) : null,
+            'combustible_litros' => $combustibleLitros !== null ? round($combustibleLitros, 1) : null,
+            'co2_kg' => $combustibleLitros !== null
+                ? round($combustibleLitros * self::KG_CO2_POR_LITRO, 1)
+                : null,
+        ];
     }
 
     /**

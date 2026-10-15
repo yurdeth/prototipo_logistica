@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, toValue } from 'vue';
+import { computed, ref } from 'vue';
 import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import { colors } from '@/UI/Colors';
 import {
@@ -12,18 +12,7 @@ import {
 import { dashboard } from '@/routes';
 import { estadoInfo, slaInfo, type Envio } from '@/config/Envios/envios';
 import { flowSteps } from '@/config/dashboard';
-import {
-    generarDespachosDemo,
-    generarConexionesDemo,
-    type Conexion,
-    type Despacho,
-} from '@/config/Rutas/rutas';
 import { fmtFecha } from '@/composables/useEnviosBI';
-import {
-    useRutasBI,
-    analizarConexiones,
-    resumenParadas,
-} from '@/composables/useRutasBI';
 
 // Componentes BI reutilizables (los mismos de Envíos y Rutas).
 import StatCards from '@/components/bi/StatCards.vue';
@@ -63,39 +52,36 @@ interface Incidencia {
 }
 
 // Datos reales enviados por DashboardController.
-const props = withDefaults(
-    defineProps<{
-        kpis: { actual: Ventana; previo: Ventana };
-        alertas: { vencidos: number; en_riesgo: number; fallos: number };
-        incidencias: Incidencia[];
-        mensual: { label: string; total: number }[];
-        sucursales: {
-            sucursal: string;
-            total: number;
-            cerrados: number;
-            a_tiempo: number;
-        }[];
-        estados: { estado: Estado; total: number }[];
-        recientes: {
-            id_envio: number;
-            codigo_guia: string;
-            destino: string;
-            cliente: string;
-            estado: Estado;
-            fecha_comprometida: string;
-        }[];
+const props = defineProps<{
+    kpis: { actual: Ventana; previo: Ventana };
+    alertas: { vencidos: number; en_riesgo: number; fallos: number };
+    incidencias: Incidencia[];
+    mensual: { label: string; total: number }[];
+    sucursales: {
+        sucursal: string;
+        total: number;
+        cerrados: number;
+        a_tiempo: number;
+    }[];
+    estados: { estado: Estado; total: number }[];
+    recientes: {
+        id_envio: number;
+        codigo_guia: string;
+        destino: string;
+        cliente: string;
+        estado: Estado;
+        fecha_comprometida: string;
+    }[];
 
-        permisos: { registrar: boolean };
-
-        // Datos de rutas: si Laravel no los envía, se usan los de demostración (igual que en Rutas).
-        despachos?: Despacho[];
-        conexiones?: Conexion[];
-    }>(),
-    {
-        despachos: () => generarDespachosDemo(),
-        conexiones: () => generarConexionesDemo(),
-    },
-);
+    permisos: { registrar: boolean };
+    eficienciaRutas: { codigo: string; pct: number }[];
+    resumenOperativo: {
+        distancia_km: number | null;
+        tiempo_horas: number | null;
+        combustible_litros: number | null;
+        co2_kg: number | null;
+    };
+}>();
 
 defineOptions({
     layout: { breadcrumbs: [{ title: 'Dashboard', href: dashboard() }] },
@@ -246,7 +232,6 @@ const segmentos = computed(() => {
         .filter((g) => g.total > 0)
         .map((g) => {
             const largo = (g.total / totalEnvios.value) * CIRCUNFERENCIA;
-
             const segmento = {
                 label: g.label,
                 color: g.color,
@@ -255,59 +240,23 @@ const segmentos = computed(() => {
             };
 
             acumulado += largo;
-
             return segmento;
         });
 });
 
 /* ───────── Datos de rutas (eficiencia y resumen operativo) ───────── */
-
-const { now, filtrados: despachosVista } = useRutasBI(
-    computed(() => props.despachos),
-);
-
-const conexionesAnalizadas = computed(() =>
-    analizarConexiones(props.conexiones),
-);
-
-// Eficiencia: porcentaje de paradas atendidas a tiempo por despacho.
-
 const colorEficiencia = (p: number) =>
     p >= 90 ? colors.azulClaro : p >= 75 ? colors.amarillo : colors.rojo;
 
-const eficiencia = computed(() =>
-    toValue(despachosVista)
-        .map((d) => {
-            const r = resumenParadas(d, toValue(now));
+const eficiencia = computed(() => props.eficienciaRutas);
 
-            return {
-                codigo: d.codigo,
-                pct: r.evaluadas ? (r.aTiempo / r.evaluadas) * 100 : null,
-            };
-        })
-
-        .filter((x): x is { codigo: string; pct: number } => x.pct !== null)
-
-        .slice(0, 5),
-);
-
-// Resumen operativo: valores estimados. Ajusta estos supuestos a tu flota.
-
-const CONSUMO_L_POR_KM = 0.13;
-
-const KG_CO2_POR_LITRO = 2.31;
-
-const kmTotal = computed(() =>
-    toValue(despachosVista).reduce((s, d) => s + (d.km_planificados ?? 0), 0),
-);
-
-const velocidadMedia = computed(() => {
-    const v = conexionesAnalizadas.value
-        .filter((c) => c.activa)
-        .map((c) => c.velocidad);
-
-    return v.length ? v.reduce((a, b) => a + b, 0) / v.length : 40;
-});
+const formatoIndicador = (valor: number | null) =>
+    valor === null
+        ? '—'
+        : valor.toLocaleString('es-SV', {
+              minimumFractionDigits: 1,
+              maximumFractionDigits: 1,
+          });
 
 // Íconos dibujados con trazos (no dependen de @/UI/Icons).
 
@@ -333,35 +282,31 @@ const iconos = {
 };
 
 const resumenOperativo = computed(() => {
-    const litros = kmTotal.value * CONSUMO_L_POR_KM;
-
     return [
         {
-            label: 'Distancia total',
-            value: kmTotal.value.toLocaleString('es-SV', {
-                maximumFractionDigits: 1,
-            }),
+            label: 'Distancia recorrida',
+            value: formatoIndicador(props.resumenOperativo.distancia_km),
             unit: 'km',
             icono: iconos.distancia,
         },
 
         {
-            label: 'Tiempo estimado',
-            value: (kmTotal.value / velocidadMedia.value).toFixed(1),
+            label: 'Tiempo registrado',
+            value: formatoIndicador(props.resumenOperativo.tiempo_horas),
             unit: 'h',
             icono: iconos.tiempo,
         },
 
         {
             label: 'Combustible estimado',
-            value: litros.toFixed(1),
+            value: formatoIndicador(props.resumenOperativo.combustible_litros),
             unit: 'L',
             icono: iconos.combustible,
         },
 
         {
             label: 'CO₂ estimado',
-            value: (litros * KG_CO2_POR_LITRO).toFixed(1),
+            value: formatoIndicador(props.resumenOperativo.co2_kg),
             unit: 'kg',
             icono: iconos.co2,
         },
@@ -369,7 +314,6 @@ const resumenOperativo = computed(() => {
 });
 
 /* ───────── Últimos envíos: tabla con pestañas ───────── */
-
 const vista = ref('recientes');
 
 const totalAtencion = computed(
@@ -389,7 +333,6 @@ const vistas = computed(() => [
 ]);
 
 // Los fallos no entran al filtro "Solo con alerta" del listado: el enlace cubre vencidos y por vencer.
-
 const hayAlertasAbiertas = computed(
     () => props.alertas.vencidos + props.alertas.en_riesgo > 0,
 );
@@ -404,9 +347,7 @@ const enlaceVista = computed(() => {
 
 const fmtTiempo = (h: number) => {
     if (h < 1) return `${Math.max(1, Math.round(h * 60))} min`;
-
     if (h < 48) return `${Math.round(h)} h`;
-
     return `${Math.floor(h / 24)} días`;
 };
 
@@ -414,9 +355,7 @@ const describir = (i: Incidencia) => {
     if (i.tipo === 'FALLO') {
         return {
             label: estadoInfo[i.estado].label,
-
             color: estadoInfo[i.estado].color,
-
             detalle: `Compromiso: ${fmtFecha(i.fecha_comprometida)}`,
         };
     }
@@ -441,7 +380,6 @@ const incidenciasVista = computed(() =>
 );
 
 // Entrega estimada: "Hoy, 3:20 p. m.", "Mañana, ..." o fecha corta.
-
 const fmtEntrega = (iso: string) => {
     const d = new Date(iso);
 
@@ -451,18 +389,14 @@ const fmtEntrega = (iso: string) => {
     });
 
     const hoyFecha = new Date();
-
     const manana = new Date(hoyFecha.getTime() + 86_400_000);
 
     if (d.toDateString() === hoyFecha.toDateString()) return `Hoy, ${hora}`;
-
     if (d.toDateString() === manana.toDateString()) return `Mañana, ${hora}`;
-
     return `${d.toLocaleDateString('es-SV', { day: 'numeric', month: 'short' })}, ${hora}`;
 };
 
 // Completado, por reprogramar o fecha prevista (en rojo si ya venció).
-
 const entrega = (r: { estado: Estado; fecha_comprometida: string }) => {
     if (r.estado === 'ENTREGADO')
         return {
@@ -493,15 +427,10 @@ const recientesVista = computed(() =>
 
 const columnas = computed<Columna[]>(() => [
     { label: 'ID' },
-
     { label: 'Cliente' },
-
     { label: 'Destino' },
-
     { label: vista.value === 'atencion' ? 'Situación' : 'Estado' },
-
     { label: vista.value === 'atencion' ? 'Detalle' : 'Entrega estimada' },
-
     { label: 'Acciones' },
 ]);
 
@@ -514,12 +443,10 @@ const sinFilas = computed(() =>
 const abrir = (id: number) => router.visit(`/envios/${id}`);
 
 /* ───────── Análisis en pestañas ───────── */
-
 const tab = ref('mensual');
 
 const tabs = [
     { key: 'mensual', label: 'Envíos por mes' },
-
     { key: 'sucursal', label: 'Cumplimiento por sucursal' },
 ] as const;
 
@@ -538,18 +465,13 @@ const filasSucursal = computed<BarRow[]>(() =>
 
         return {
             key: s.sucursal,
-
             label: s.sucursal,
-
             width: pct ?? 0,
-
             color: soft(colors.azulClaro, '99'),
-
             detail:
                 pct === null
                     ? 'Sin entregas cerradas'
                     : `${pct.toFixed(1)}% a tiempo`,
-
             accent: `${s.total} envíos`,
         };
     }),
@@ -733,7 +655,7 @@ const resumenAnalisis = computed(() =>
                 >
                     <BiPanelHead
                         title="Eficiencia de rutas"
-                        description="Porcentaje de paradas atendidas a tiempo."
+                        description="Puntualidad de paradas registrada en los últimos 14 días."
                     />
                     <div v-if="eficiencia.length" class="mt-5">
                         <div
@@ -825,7 +747,7 @@ const resumenAnalisis = computed(() =>
                 >
                     <BiPanelHead
                         title="Resumen operativo"
-                        description="Estimaciones acumuladas de los despachos del período."
+                        description="Indicadores calculados con recorridos y registros de los últimos 14 días."
                     />
                     <dl
                         class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4"
@@ -877,13 +799,107 @@ const resumenAnalisis = computed(() =>
                             </div>
                         </div>
                     </dl>
-                    <p
-                        class="mt-3 rounded-xl border border-sidebar-border/60 bg-muted/20 px-3 py-2 text-xs leading-relaxed text-muted-foreground"
+                    <aside
+                        class="mt-5 rounded-2xl border border-sidebar-border/70 bg-muted/20 p-4 sm:p-5"
+                        aria-label="Cómo se calculan los indicadores"
                     >
-                        Combustible y CO₂ son estimaciones calculadas con
-                        {{ (CONSUMO_L_POR_KM * 100).toFixed(0) }} L por cada 100
-                        km y {{ KG_CO2_POR_LITRO }} kg de CO₂ por litro.
-                    </p>
+                        <div
+                            class="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between"
+                        >
+                            <div>
+                                <p
+                                    class="text-[10px] font-semibold tracking-[0.16em] text-muted-foreground uppercase"
+                                >
+                                    Sobre los datos
+                                </p>
+                                <h3
+                                    class="mt-1 text-sm font-semibold text-foreground"
+                                >
+                                    Cómo se calculan estos indicadores
+                                </h3>
+                            </div>
+                            <p
+                                class="text-xs leading-relaxed text-muted-foreground"
+                            >
+                                Criterios para interpretar el resumen operativo.
+                            </p>
+                        </div>
+
+                        <div class="mt-4 grid gap-3 md:grid-cols-3">
+                            <article
+                                class="rounded-xl border border-sidebar-border/60 bg-card p-3.5 shadow-sm"
+                            >
+                                <div class="flex items-center gap-2.5">
+                                    <span
+                                        class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-xs font-bold text-emerald-700 dark:text-emerald-300"
+                                        aria-hidden="true"
+                                    >
+                                        km
+                                    </span>
+                                    <h4
+                                        class="text-sm font-semibold text-foreground"
+                                    >
+                                        Combustible
+                                    </h4>
+                                </div>
+                                <p
+                                    class="mt-3 text-xs leading-relaxed text-muted-foreground"
+                                >
+                                    Se estima con los kilómetros recorridos y el
+                                    rendimiento (km/galón) registrado para cada
+                                    vehículo.
+                                </p>
+                            </article>
+
+                            <article
+                                class="rounded-xl border border-sidebar-border/60 bg-card p-3.5 shadow-sm"
+                            >
+                                <div class="flex items-center gap-2.5">
+                                    <span
+                                        class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-500/10 text-[11px] font-bold text-sky-700 dark:text-sky-300"
+                                        aria-hidden="true"
+                                    >
+                                        CO₂
+                                    </span>
+                                    <h4
+                                        class="text-sm font-semibold text-foreground"
+                                    >
+                                        Emisiones de CO₂
+                                    </h4>
+                                </div>
+                                <p
+                                    class="mt-3 text-xs leading-relaxed text-muted-foreground"
+                                >
+                                    Se calculan con un factor de 2.31 kg de CO₂
+                                    por litro de combustible.
+                                </p>
+                            </article>
+
+                            <article
+                                class="rounded-xl border border-sidebar-border/60 bg-card p-3.5 shadow-sm"
+                            >
+                                <div class="flex items-center gap-2.5">
+                                    <span
+                                        class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-lg font-semibold text-amber-700 dark:text-amber-300"
+                                        aria-hidden="true"
+                                    >
+                                        —
+                                    </span>
+                                    <h4
+                                        class="text-sm font-semibold text-foreground"
+                                    >
+                                        Sin datos suficientes
+                                    </h4>
+                                </div>
+                                <p
+                                    class="mt-3 text-xs leading-relaxed text-muted-foreground"
+                                >
+                                    Se muestra «—» cuando no hay registros
+                                    suficientes para calcular un indicador.
+                                </p>
+                            </article>
+                        </div>
+                    </aside>
                 </section>
             </div>
             <!-- Últimos envíos. -->
@@ -1164,6 +1180,7 @@ const resumenAnalisis = computed(() =>
                 </div>
             </section>
         </template>
+
         <!-- Vista de Analítica BI. -->
         <section
             v-else
