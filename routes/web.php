@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Clientes\ClienteController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Envios\EnvioController;
 use App\Http\Controllers\Flota\VehiculoController;
@@ -66,6 +67,31 @@ Route::middleware(['auth'])->group(function () {
         Route::put('{empleado}', [EmpleadoController::class, 'update'])->whereNumber('empleado')->name('update');
         Route::post('{empleado}/desactivar', [EmpleadoController::class, 'desactivar'])->whereNumber('empleado')->name('desactivar');
         Route::post('{empleado}/reactivar', [EmpleadoController::class, 'reactivar'])->whereNumber('empleado')->name('reactivar');
+    });
+
+    /*  Clientes
+        --------------------------------------------------------------------------
+        Cualquier usuario autenticado consulta. Registrar, editar y eliminar dependen
+        de los gates 'clientes.registrar', 'clientes.editar' y 'clientes.eliminar'.
+    */
+    Route::prefix('clientes')->name('clientes.')->group(function () {
+        Route::get('/', [ClienteController::class, 'index'])->name('index');
+        Route::get('exportar', [ClienteController::class, 'exportar'])->name('exportar');
+
+        Route::middleware('can:clientes.registrar')->group(function () {
+            Route::get('crear', [ClienteController::class, 'create'])->name('create');
+            Route::post('/', [ClienteController::class, 'store'])->name('store');
+        });
+
+        Route::middleware('can:clientes.editar')->group(function () {
+            Route::get('{cliente}/editar', [ClienteController::class, 'edit'])->whereNumber('cliente')->name('edit');
+            Route::put('{cliente}', [ClienteController::class, 'update'])->whereNumber('cliente')->name('update');
+        });
+
+        Route::delete('{cliente}', [ClienteController::class, 'destroy'])
+            ->whereNumber('cliente')
+            ->middleware('can:clientes.eliminar')
+            ->name('destroy');
     });
 });
 

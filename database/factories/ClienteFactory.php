@@ -37,7 +37,11 @@ class ClienteFactory extends Factory
         'El Faro', 'La Unión', 'Salvadoreña', 'Santa Ana',
     ];
 
-    /** Nombres ya entregados en este proceso. @var array<string, true> */
+    /**
+     * Nombres ya entregados en este proceso.
+     *
+     * @var array<string, true>
+     */
     private static array $usados = [];
 
     public function definition(): array

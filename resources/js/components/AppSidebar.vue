@@ -20,6 +20,7 @@ import { index as rutasRuta } from '@/routes/rutas';
 import { index as empleadosRuta } from '@/routes/empleados';
 import { index as enviosRuta } from '@/routes/envios';
 import { index as vehiculosRuta } from '@/routes/vehiculos';
+import { index as clientes } from '@/routes/clientes';
 import type { NavItem } from '@/types';
 
 const mainNavItems: NavItem[] = [
@@ -32,7 +33,7 @@ const mainNavItems: NavItem[] = [
     { title: 'Rutas', href: rutasRuta(), icon: Route },
     { title: 'Empleados', href: empleadosRuta(), icon: Users },
     { title: 'Vehículos', href: vehiculosRuta(), icon: Truck },
-    { title: 'Clientes', href: '#', icon: Building2 },
+    { title: 'Clientes', href: clientes(), icon: Building2 },
     { title: 'Reportes', href: '#', icon: FileText },
 ];
 

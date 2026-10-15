@@ -5,10 +5,12 @@ import type { Activo } from './Utils';
 withDefaults(
     defineProps<{
         placeholder: string;
-        periodos: readonly { value: number; label: string }[];
+        periodos?: readonly { value: number; label: string }[];
         activos: Activo[];
         hayFiltros?: boolean;
         alertaLabel?: string;
+        // Oculta el botón de alertas en listados que no lo usan (por ejemplo, Clientes).
+        sinAlertas?: boolean;
     }>(),
     { alertaLabel: 'Solo con alerta' },
 );
@@ -45,6 +47,7 @@ const controlClase =
             </div>
 
             <select
+                v-if="periodos?.length"
                 v-model.number="periodo"
                 aria-label="Período"
                 :class="[controlClase, 'w-full sm:w-auto']"
@@ -55,6 +58,7 @@ const controlClase =
             </select>
 
             <button
+                v-if="!sinAlertas"
                 type="button"
                 class="inline-flex h-10 items-center justify-center gap-2 rounded-lg border px-4 text-sm font-medium transition-colors hover:bg-muted"
                 :class="
