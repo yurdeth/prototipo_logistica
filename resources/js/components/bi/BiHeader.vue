@@ -24,6 +24,9 @@ defineEmits<{ exportar: [] }>();
         </div>
 
         <div class="flex gap-2">
+            <!-- Acciones extra de cada vista (por ejemplo, "Ver mapa" en Rutas). Opcional. -->
+            <slot name="acciones" />
+
             <!-- Exporta los datos filtrados en formato CSV. -->
             <button
                 type="button"

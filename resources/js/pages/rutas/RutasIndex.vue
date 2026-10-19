@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, toValue } from 'vue';
-import { Head } from '@inertiajs/vue3';
+import { Head, Link } from '@inertiajs/vue3';
 import { colors } from '@/UI/Colors';
 import { dashboard } from '@/routes';
+import { MapPin } from '@/UI/Icons';
 
 import {
     estadoDespachoInfo,
@@ -10,8 +11,6 @@ import {
     TOLERANCIA_MIN,
     UMBRAL_DESVIACION,
     VELOCIDAD_LENTA,
-    generarDespachosDemo,
-    generarConexionesDemo,
     type Conexion,
     type Despacho,
 } from '@/config/Rutas/rutas';
@@ -68,14 +67,7 @@ defineOptions({
     },
 });
 
-// Datos de demostración cuando Laravel no envía datos.
-const props = withDefaults(
-    defineProps<{ despachos?: Despacho[]; conexiones?: Conexion[] }>(),
-    {
-        despachos: () => generarDespachosDemo(),
-        conexiones: () => generarConexionesDemo(),
-    },
-);
+const props = defineProps<{ despachos: Despacho[]; conexiones: Conexion[] }>();
 
 // Datos, indicadores y funciones de la vista.
 const {
@@ -342,7 +334,17 @@ const resumen = (d: Despacho) => {
             accion="Nuevo despacho"
             href="/rutas/crear"
             @exportar="exportarCsv"
-        />
+        >
+            <template #acciones>
+                <Link
+                    href="/rutas/mapa"
+                    class="inline-flex h-10 items-center gap-2 rounded-lg border border-sidebar-border/70 bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+                >
+                    <MapPin class="h-4 w-4" aria-hidden="true" />
+                    Ver mapa
+                </Link>
+            </template>
+        </EncabezadoAcciones>
 
         <!-- Resumen de indicadores -->
         <BiStats :items="estadisticas" :cols="4" />
