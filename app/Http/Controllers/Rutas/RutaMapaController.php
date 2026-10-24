@@ -186,13 +186,13 @@ class RutaMapaController extends Controller
             ])
             ->values();
 
-        $idsRuta = $envios->pluck('ruta_id')->filter()->unique()->values()->all();
+        $idsRuta = array_values($envios->pluck('ruta_id')->filter()->unique()->map(fn ($id) => (int) $id)->all());
         if ($filtros['ruta'] !== null) {
             $idsRuta[] = $filtros['ruta'];
             $idsRuta = array_values(array_unique($idsRuta));
         }
         $rutas = $this->rutas($idsRuta);
-        $idsEnvio = $envios->pluck('id')->all();
+        $idsEnvio = array_values($envios->pluck('id')->map(fn ($id) => (int) $id)->all());
         $incidencias = $this->incidenciasFiltradas($idsEnvio, $idsRuta);
 
         return response()->json([
@@ -229,7 +229,7 @@ class RutaMapaController extends Controller
     /** @return list<int> */
     private function territoriosDescendientes(int $territorio): array
     {
-        return collect(DB::select(
+        return array_values(collect(DB::select(
             'WITH RECURSIVE jerarquia AS (
                 SELECT id_territorio
                 FROM territorio.territorios
@@ -244,7 +244,7 @@ class RutaMapaController extends Controller
         ))
             ->pluck('id_territorio')
             ->map(fn ($id) => (int) $id)
-            ->all();
+            ->all());
     }
 
     /** @return Collection<int, array{id: int, nombre: string, tipo: string, padre_id: int|null, padre: string|null}> */
@@ -264,10 +264,10 @@ class RutaMapaController extends Controller
             ->get()
             ->map(fn ($t) => [
                 'id' => (int) $t->id,
-                'nombre' => $t->nombre,
-                'tipo' => $t->tipo,
+                'nombre' => (string) $t->nombre,
+                'tipo' => (string) $t->tipo,
                 'padre_id' => $t->padre_id !== null ? (int) $t->padre_id : null,
-                'padre' => $t->padre,
+                'padre' => $t->padre !== null ? (string) $t->padre : null,
             ])
             ->values();
     }
@@ -344,12 +344,12 @@ class RutaMapaController extends Controller
 
     /**
      * @param  list<int>  $ids
-     * @return Collection<int, array<string, mixed>>
+     * @return list<array{id: int, codigo: string, fecha: string|null, estado: string|null, sucursal: string|null, origen: array{lat: float, lng: float}|null, km_planificados: float|null, km_recorridos: float|null, incidencias: int, minutos_retraso: int, paradas: list<array<string, mixed>>}>
      */
-    private function rutas(array $ids): Collection
+    private function rutas(array $ids): array
     {
         if ($ids === []) {
-            return collect();
+            return [];
         }
 
         $incidencias = DB::table('rutas.incidencias')
@@ -391,32 +391,31 @@ class RutaMapaController extends Controller
             ->leftJoinSub($incidenciasPorEnvio, 'ie', 'ie.envio_id', '=', 'e.id_envio')
             ->whereIn('p.despacho_id', $ids)
             ->orderBy('p.despacho_id')
-            ->orderBy('p.orden');
-
-        $paradasPorRuta->selectRaw('
-            COALESCE(pos.lat, centro.lat, centro_padre.lat) as lat,
-            COALESCE(pos.lng, centro.lng, centro_padre.lng) as lng,
-            (
-                pos.lat IS NULL
-                AND (centro.lat IS NOT NULL OR centro_padre.lat IS NOT NULL)
-            ) as ubicacion_aproximada
-        ');
-
-        $paradasPorRuta = $paradasPorRuta->get([
-            'p.despacho_id',
-            'e.id_envio',
-            'p.orden',
-            'e.codigo_guia',
-            't.nombre_territorio as destino',
-            'e.direccion_destino as direccion',
-            's.nombre_estado as estado_envio',
-            'p.hora_estimada',
-            'p.hora_real',
-            'ie.total as incidencias',
-        ])
+            ->orderBy('p.orden')
+            ->addSelect([
+                'p.despacho_id',
+                'e.id_envio',
+                'p.orden',
+                'e.codigo_guia',
+                't.nombre_territorio as destino',
+                'e.direccion_destino as direccion',
+                's.nombre_estado as estado_envio',
+                'p.hora_estimada',
+                'p.hora_real',
+                'ie.total as incidencias',
+            ])
+            ->selectRaw('
+                COALESCE(pos.lat, centro.lat, centro_padre.lat) as lat,
+                COALESCE(pos.lng, centro.lng, centro_padre.lng) as lng,
+                (
+                    pos.lat IS NULL
+                    AND (centro.lat IS NOT NULL OR centro_padre.lat IS NOT NULL)
+                ) as ubicacion_aproximada
+            ')
+            ->get()
             ->groupBy('despacho_id');
 
-        return DB::table('rutas.despachos as d')
+        return array_values(DB::table('rutas.despachos as d')
             ->join('rutas.estados_despachos as ed', 'ed.id_estado', '=', 'd.estado_despacho_id')
             ->join('territorio.sucursales as su', 'su.id_sucursal', '=', 'd.sucursal_origen_id')
             ->leftJoinSub($incidencias, 'inc', 'inc.despacho_id', '=', 'd.id_despacho')
@@ -436,7 +435,7 @@ class RutaMapaController extends Controller
                 'inc.minutos_retraso',
             ])
             ->map(function ($d) use ($paradasPorRuta): array {
-                $paradas = $paradasPorRuta->get((int) $d->id_despacho, collect())
+                $paradas = array_values($paradasPorRuta->get((int) $d->id_despacho, collect())
                     ->map(fn ($parada) => [
                         'id' => (int) $parada->id_envio,
                         'orden' => (int) $parada->orden,
@@ -452,14 +451,14 @@ class RutaMapaController extends Controller
                         'ubicacion_aproximada' => (bool) $parada->ubicacion_aproximada,
                         'incidencias' => (int) ($parada->incidencias ?? 0),
                     ])
-                    ->values();
+                    ->all());
 
                 return [
                     'id' => (int) $d->id_despacho,
                     'codigo' => 'DSP-'.str_pad((string) $d->id_despacho, 6, '0', STR_PAD_LEFT),
-                    'fecha' => $d->fecha,
-                    'estado' => $d->estado,
-                    'sucursal' => $d->sucursal,
+                    'fecha' => $d->fecha !== null ? (string) $d->fecha : null,
+                    'estado' => $d->estado !== null ? (string) $d->estado : null,
+                    'sucursal' => $d->sucursal !== null ? (string) $d->sucursal : null,
                     'origen' => $this->punto($d->latitud, $d->longitud),
                     'km_planificados' => $d->km_planificados !== null ? (float) $d->km_planificados : null,
                     'km_recorridos' => $d->km_recorridos !== null ? (float) $d->km_recorridos : null,
@@ -468,9 +467,10 @@ class RutaMapaController extends Controller
                     'paradas' => $paradas,
                 ];
             })
-            ->values();
+            ->all());
     }
 
+    /** @return Collection<int, array{id: int, codigo: string, fecha: string|null, estado: string|null}> */
     private function opcionesRuta(?CarbonInterface $desde): Collection
     {
         return DB::table('rutas.despachos as d')
@@ -493,13 +493,16 @@ class RutaMapaController extends Controller
             ->map(fn ($d) => [
                 'id' => (int) $d->id,
                 'codigo' => 'DSP-'.str_pad((string) $d->id, 6, '0', STR_PAD_LEFT),
-                'fecha' => $d->fecha,
-                'estado' => $d->estado,
+                'fecha' => $d->fecha !== null ? (string) $d->fecha : null,
+                'estado' => $d->estado !== null ? (string) $d->estado : null,
             ])
             ->values();
     }
 
-    /** @param list<int> $envioIds @param list<int> $rutaIds */
+    /**
+     * @param  list<int>  $envioIds
+     * @param  list<int>  $rutaIds
+     */
     private function incidenciasFiltradas(array $envioIds, array $rutaIds): int
     {
         if ($envioIds === [] && $rutaIds === []) {
@@ -522,7 +525,7 @@ class RutaMapaController extends Controller
     /** @return list<array<string, mixed>> */
     private function sucursales(): array
     {
-        return DB::table('territorio.sucursales')
+        return array_values(DB::table('territorio.sucursales')
             ->orderBy('nombre_sucursal')
             ->get(['id_sucursal', 'codigo', 'nombre_sucursal', 'direccion', 'latitud', 'longitud', 'activa'])
             ->map(fn ($s) => [
@@ -533,8 +536,7 @@ class RutaMapaController extends Controller
                 'activa' => (bool) $s->activa,
                 'punto' => $this->punto($s->latitud, $s->longitud),
             ])
-            ->values()
-            ->all();
+            ->all());
     }
 
     /** @return array{lat: float, lng: float}|null */

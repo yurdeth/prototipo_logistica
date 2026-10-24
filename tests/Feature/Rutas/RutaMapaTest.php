@@ -38,13 +38,12 @@ class RutaMapaTest extends TestCase
 
     public function test_el_indice_muestra_los_niveles_territoriales_disponibles(): void
     {
+        // Los territorios ya no viajan como prop: el mapa los trae de /rutas/mapa/datos.
         $this->actingAs(User::factory()->create())
             ->get('/rutas/mapa')
             ->assertOk()
             ->assertInertia(
-                fn ($page) => $page
-                    ->component('rutas/RutasMapa')
-                    ->has('territorios'),
+                fn ($page) => $page->component('rutas/RutasMapa'),
             );
     }
 

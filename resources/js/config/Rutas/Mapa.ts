@@ -256,12 +256,16 @@ export const visualRuta = (estado?: string | null): VisualRuta =>
 /* ───────── Utilidades ───────── */
 /** Los datos vienen de la base: se escapan antes de insertarlos en el HTML de un popup. */
 export const escapeHtml = (valor: unknown): string =>
-    String(valor ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
+    typeof valor === 'string'
+        ? valor
+        : valor == null
+          ? ''
+          : JSON.stringify(valor)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
 
 export const fmtHora = (iso: string | null): string => {
     if (!iso) return '—';
