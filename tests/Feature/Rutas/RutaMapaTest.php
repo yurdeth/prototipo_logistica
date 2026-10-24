@@ -5,7 +5,6 @@ namespace Tests\Feature\Rutas;
 use App\Models\Envio;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class RutaMapaTest extends TestCase
@@ -49,22 +48,13 @@ class RutaMapaTest extends TestCase
             );
     }
 
-    public function test_el_mapa_no_usa_el_poligono_territorial_para_estimar_ubicaciones(): void
+    public function test_el_api_del_mapa_ya_no_expone_catalogos_de_zonas(): void
     {
-        $envio = Envio::factory()->hasta('EN_RUTA')->create();
-
-        DB::update(
-            "UPDATE territorio.territorios
-             SET zona = ST_SetSRID(ST_GeomFromText('POLYGON((-89.3 13.6, -89.2 13.6, -89.2 13.7, -89.3 13.7, -89.3 13.6))'), 4326)::geography
-             WHERE id_territorio = ?",
-            [$envio->territorio_destino_id],
-        );
-
+        Envio::factory()->hasta('EN_RUTA')->create();
         $this->actingAs(User::factory()->create())
             ->getJson('/rutas/mapa/datos?dias=0')
             ->assertOk()
-            ->assertJsonPath('envios.0.id', $envio->id_envio)
-            ->assertJsonPath('envios.0.lat', null)
-            ->assertJsonPath('envios.0.lng', null);
+            ->assertJsonMissingPath('catalogos.zonas')
+            ->assertJsonMissingPath('filtros.zona');
     }
 }

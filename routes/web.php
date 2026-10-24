@@ -43,10 +43,6 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/', [DespachoController::class, 'index'])->name('index');
         Route::get('mapa', [RutaMapaController::class, 'index'])->name('mapa');
         Route::get('mapa/datos', [RutaMapaController::class, 'datos'])->name('mapa.datos');
-        Route::post('mapa/zonas/{territorio}', [RutaMapaController::class, 'guardarZona'])
-            ->whereNumber('territorio')
-            ->middleware('can:rutas.zonas')
-            ->name('mapa.zonas.guardar');
 
         Route::middleware('can:despachos.gestionar')->group(function () {
             Route::get('crear', [DespachoController::class, 'create'])->name('create');

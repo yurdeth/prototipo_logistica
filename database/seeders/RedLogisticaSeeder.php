@@ -112,7 +112,7 @@ class RedLogisticaSeeder extends Seeder
                 [$sucursales[$ciudadOrigen], $sucursales[$ciudadDestino]],
             )->km;
 
-            // Los tramos que nacen o tocan San Salvador cruzan zona urbana: más lentos
+            // Los tramos que pasan por el área urbana de San Salvador son más lentos.
             $tocaCapital = in_array('San Salvador', [$ciudadOrigen, $ciudadDestino], true);
             $velocidad = $tocaCapital ? 45 : 65;
 

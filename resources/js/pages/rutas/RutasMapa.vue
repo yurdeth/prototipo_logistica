@@ -17,6 +17,7 @@ import {
 } from '@/config/Envios/envios';
 import MapaRutas from './MapaRutas.vue';
 import {
+    fmtHora,
     visualRuta,
     type DatosMapa,
     type EnvioMapa,
@@ -41,13 +42,13 @@ const filtros = reactive({
     estado: '',
     ruta: '',
     territorio: '',
-    zona: '',
 });
 const datos = ref<DatosMapa | null>(null);
 const error = ref<string | null>(null);
 const cargando = ref(false);
-const filtrosTocados = ref(false);
 const filtrosAbiertos = ref(false);
+const indiceParadaActual = ref(0);
+const mostrarConexiones = ref(false);
 const panelActivo = ref<'resumen' | 'territorios' | 'recorridos' | 'estados'>(
     'resumen',
 );
@@ -113,14 +114,39 @@ onBeforeUnmount(() => {
 });
 
 watch(filtros, () => {
-    filtrosTocados.value = true;
     void cargarDatos();
 });
+
+watch(
+    () => filtros.ruta,
+    (ruta) => {
+        indiceParadaActual.value = 0;
+        if (ruta) {
+            mostrarConexiones.value = true;
+        }
+    },
+);
 
 const territoriosDisponibles = computed(
     () => datos.value?.catalogos.territorios ?? props.territorios,
 );
-const zonasDisponibles = computed(() => datos.value?.catalogos.zonas ?? []);
+const rutaSeleccionada = computed(
+    () =>
+        datos.value?.rutas.find((ruta) => String(ruta.id) === filtros.ruta) ??
+        null,
+);
+const paradasRuta = computed(() => rutaSeleccionada.value?.paradas ?? []);
+const paradaActual = computed(
+    () => paradasRuta.value[indiceParadaActual.value] ?? null,
+);
+
+const avanzarParada = (direccion: -1 | 1): void => {
+    indiceParadaActual.value = Math.min(
+        Math.max(indiceParadaActual.value + direccion, 0),
+        paradasRuta.value.length - 1,
+    );
+};
+
 const kpis = computed(() => datos.value?.kpis);
 const maxEnviosTerritorio = computed(() =>
     Math.max(
@@ -187,7 +213,6 @@ const limpiarFiltros = (): void => {
     filtros.estado = '';
     filtros.ruta = '';
     filtros.territorio = '';
-    filtros.zona = '';
 };
 
 const tituloPeriodo = computed(() => {
@@ -202,7 +227,7 @@ const territorioSeleccionado = (envio: EnvioMapa): string =>
         ? `${envio.territorio} · ${envio.territorio_padre}`
         : envio.territorio;
 
-type ClaveFiltro = 'dias' | 'estado' | 'ruta' | 'territorio' | 'zona';
+type ClaveFiltro = 'dias' | 'estado' | 'ruta' | 'territorio';
 
 const filtrosActivos = computed(() => {
     const activos: { clave: ClaveFiltro; texto: string }[] = [];
@@ -234,16 +259,6 @@ const filtrosActivos = computed(() => {
             texto: territorio?.nombre ?? 'Territorio seleccionado',
         });
     }
-    if (filtros.zona) {
-        const zona = zonasDisponibles.value.find(
-            (opcion) => String(opcion.id) === filtros.zona,
-        );
-        activos.push({
-            clave: 'zona',
-            texto: zona?.nombre ?? 'Zona seleccionada',
-        });
-    }
-
     return activos;
 });
 
@@ -430,25 +445,6 @@ const quitarFiltro = (clave: ClaveFiltro): void => {
                         </option>
                     </select>
                 </label>
-                <label class="grid gap-1.5 text-sm">
-                    <span class="font-medium text-foreground"
-                        >Zona geográfica</span
-                    >
-                    <select
-                        v-model="filtros.zona"
-                        :disabled="!zonasDisponibles.length"
-                        class="h-10 rounded-lg border border-sidebar-border/70 bg-background px-3 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                        <option value="">Todas las zonas</option>
-                        <option
-                            v-for="zona in zonasDisponibles"
-                            :key="zona.id"
-                            :value="String(zona.id)"
-                        >
-                            {{ zona.nombre }}
-                        </option>
-                    </select>
-                </label>
             </div>
         </section>
 
@@ -469,7 +465,7 @@ const quitarFiltro = (clave: ClaveFiltro): void => {
                 <div
                     class="flex flex-wrap items-center justify-between gap-3 border-b border-sidebar-border/70 px-4 py-3"
                 >
-                    <div>
+                    <div class="min-w-0">
                         <h2 class="font-semibold text-foreground">
                             Distribución geográfica
                         </h2>
@@ -479,6 +475,79 @@ const quitarFiltro = (clave: ClaveFiltro): void => {
                             disponible
                         </p>
                     </div>
+                    <label class="grid min-w-48 gap-1 text-xs">
+                        <span class="font-medium text-foreground"
+                            >Ruta para seguimiento</span
+                        >
+                        <select
+                            v-model="filtros.ruta"
+                            class="h-9 rounded-lg border border-sidebar-border/70 bg-background px-2 text-sm"
+                        >
+                            <option value="">Selecciona una ruta</option>
+                            <option
+                                v-for="ruta in datos?.catalogos.rutas ?? []"
+                                :key="ruta.id"
+                                :value="String(ruta.id)"
+                            >
+                                {{ ruta.codigo }} · {{ ruta.fecha }}
+                            </option>
+                        </select>
+                    </label>
+                    <button
+                        type="button"
+                        class="min-h-9 rounded-lg border border-sidebar-border/70 px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                        :class="
+                            mostrarConexiones
+                                ? 'border-primary bg-primary/5 text-primary'
+                                : ''
+                        "
+                        :aria-pressed="mostrarConexiones"
+                        @click="mostrarConexiones = !mostrarConexiones"
+                    >
+                        Mostrar conexiones
+                    </button>
+                </div>
+                <div
+                    class="flex flex-wrap items-center justify-between gap-3 border-b border-sidebar-border/70 bg-muted/20 px-4 py-2"
+                    aria-label="Seguimiento secuencial de paradas"
+                >
+                    <div class="flex items-center gap-2">
+                        <button
+                            type="button"
+                            class="min-h-9 rounded-lg border border-sidebar-border/70 bg-background px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                            :disabled="
+                                !paradasRuta.length || indiceParadaActual === 0
+                            "
+                            @click="avanzarParada(-1)"
+                        >
+                            Parada anterior
+                        </button>
+                        <button
+                            type="button"
+                            class="min-h-9 rounded-lg border border-sidebar-border/70 bg-background px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                            :disabled="
+                                !paradasRuta.length ||
+                                indiceParadaActual >= paradasRuta.length - 1
+                            "
+                            @click="avanzarParada(1)"
+                        >
+                            Siguiente parada
+                        </button>
+                    </div>
+                    <p
+                        class="text-sm font-semibold text-foreground tabular-nums"
+                        role="status"
+                        aria-live="polite"
+                    >
+                        {{
+                            paradasRuta.length
+                                ? `Parada ${indiceParadaActual + 1} de ${paradasRuta.length}`
+                                : 'Selecciona una ruta'
+                        }}
+                    </p>
+                    <span class="text-xs text-muted-foreground">
+                        Seguimiento manual · sin GPS en tiempo real
+                    </span>
                 </div>
                 <div
                     v-if="datos"
@@ -488,12 +557,11 @@ const quitarFiltro = (clave: ClaveFiltro): void => {
                         :sucursales="datos.sucursales"
                         :despachos="datos.rutas"
                         :envios="datos.envios"
-                        :zonas="datos.catalogos.zonas"
                         :seleccionado="
                             filtros.ruta ? Number(filtros.ruta) : null
                         "
-                        :modo-zonas="false"
-                        :mostrar-rutas="filtrosTocados"
+                        :parada-seleccionada-id="paradaActual?.envio_id ?? null"
+                        :mostrar-conexiones="mostrarConexiones"
                         @seleccionar="seleccionarRuta"
                     />
                 </div>
@@ -507,14 +575,88 @@ const quitarFiltro = (clave: ClaveFiltro): void => {
                             : 'No hay información para mostrar.'
                     }}
                 </div>
+                <div
+                    v-if="paradaActual"
+                    class="mx-4 mt-4 mb-4 grid gap-4 rounded-lg border border-sidebar-border/70 bg-card p-4 text-sm shadow-sm sm:grid-cols-2 sm:p-5"
+                    aria-label="Información de la parada seleccionada"
+                >
+                    <div class="min-w-0">
+                        <p class="text-xs font-medium text-muted-foreground">
+                            Parada {{ paradaActual.orden }} ·
+                            {{
+                                indiceParadaActual === paradasRuta.length - 1
+                                    ? 'Destino final'
+                                    : indiceParadaActual === 0
+                                      ? 'Inicio del recorrido'
+                                      : 'Parada intermedia'
+                            }}
+                        </p>
+                        <p class="truncate font-semibold text-foreground">
+                            {{ paradaActual.codigo_guia }} ·
+                            {{ paradaActual.destino }}
+                        </p>
+                        <p class="truncate text-xs text-muted-foreground">
+                            {{
+                                paradaActual.direccion ||
+                                'Sin dirección registrada'
+                            }}
+                        </p>
+                        <p
+                            v-if="paradaActual.ubicacion_aproximada"
+                            class="mt-1 text-xs font-medium text-amber-700"
+                        >
+                            Ubicación aproximada: referencia territorial o de
+                            sucursales; no es dirección exacta ni GPS.
+                        </p>
+                        <p
+                            v-else-if="
+                                paradaActual.lat === null ||
+                                paradaActual.lng === null
+                            "
+                            class="mt-1 text-xs font-medium text-destructive"
+                        >
+                            Sin coordenadas reportadas ni referencia territorial
+                            configurada; esta parada no puede ubicarse en el
+                            mapa.
+                        </p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                        <span class="text-muted-foreground"
+                            >Estado del envío</span
+                        >
+                        <span class="text-right font-medium text-foreground">
+                            {{
+                                paradaActual.estado_envio
+                                    ? etiquetaEstado(paradaActual.estado_envio)
+                                    : 'Sin estado'
+                            }}
+                        </span>
+                        <span class="text-muted-foreground">Hora estimada</span>
+                        <span class="text-right font-medium text-foreground">
+                            {{ fmtHora(paradaActual.hora_estimada) }}
+                        </span>
+                        <span class="text-muted-foreground">Hora real</span>
+                        <span class="text-right font-medium text-foreground">
+                            {{
+                                paradaActual.hora_real
+                                    ? fmtHora(paradaActual.hora_real)
+                                    : 'Pendiente'
+                            }}
+                        </span>
+                        <span class="text-muted-foreground">Incidencias</span>
+                        <span class="text-right font-medium text-foreground">
+                            {{ paradaActual.incidencias }}
+                        </span>
+                    </div>
+                </div>
                 <p
                     v-if="datos && enviosConUbicacion < datos.kpis.total"
                     class="border-t border-sidebar-border/70 px-4 py-2 text-xs text-muted-foreground"
                 >
                     {{ datos.kpis.total - enviosConUbicacion }} envío(s) no
-                    tienen coordenadas reportadas en sus eventos. Solo se
-                    muestran ubicaciones registradas en la base de datos; no se
-                    estiman posiciones a partir del territorio.
+                    tienen coordenadas reportadas en sus eventos. El seguimiento
+                    puede usar una referencia aproximada calculada a partir de
+                    las ubicaciones de sucursales del territorio.
                 </p>
             </section>
 
@@ -691,21 +833,6 @@ const quitarFiltro = (clave: ClaveFiltro): void => {
                         class="py-8 text-center text-sm text-muted-foreground"
                     >
                         No hay envíos para los filtros seleccionados.
-                    </p>
-                    <p
-                        v-if="datos && !zonasDisponibles.length"
-                        class="border-t border-sidebar-border/70 pt-3 text-xs text-muted-foreground"
-                    >
-                        <template v-if="datos.zonas_soportadas">
-                            No hay polígonos configurados todavía. El análisis
-                            territorial sigue disponible por departamento,
-                            municipio y distrito.
-                        </template>
-                        <template v-else>
-                            Esta base no tiene la columna opcional de geometría
-                            territorial; el mapa la omite y sigue funcionando
-                            con la jerarquía territorial existente.
-                        </template>
                     </p>
                 </div>
 

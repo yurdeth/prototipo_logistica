@@ -67,6 +67,5 @@ class AppServiceProvider extends ServiceProvider
         Gate::define('clientes.registrar', fn (User $u) => $tieneRol($u, 'admin', 'operador'));
         Gate::define('clientes.editar', fn (User $u) => $tieneRol($u, 'admin'));
         Gate::define('clientes.eliminar', fn (User $u) => $tieneRol($u, 'admin'));
-        Gate::define('rutas.zonas', fn (User $u) => $tieneRol($u, 'admin'));
     }
 }

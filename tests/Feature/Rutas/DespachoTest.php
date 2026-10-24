@@ -16,6 +16,7 @@ use Database\Seeders\RedLogisticaSeeder;
 use Database\Seeders\RoleSeeder;
 use Database\Seeders\TipoVehiculoSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class DespachoTest extends TestCase
@@ -114,6 +115,113 @@ class DespachoTest extends TestCase
         expect($despacho->paradas)->toHaveCount(2)
             ->and($despacho->estado->nombre_estado)->toBe('PLANIFICADO')
             ->and((float) $despacho->km_planificados)->toBe(120.0);
+    }
+
+    public function test_el_seguimiento_conserva_todas_las_paradas_aunque_se_filtre_por_estado(): void
+    {
+        $envios = [
+            Envio::factory()->hasta('EN_CENTRO')->create(),
+            Envio::factory()->hasta('EN_CENTRO')->create(),
+        ];
+        $paradas = array_map(
+            fn (Envio $envio, int $indice): array => [
+                'envio_id' => $envio->id_envio,
+                'orden' => $indice + 1,
+                'hora_estimada' => now()->setTime(9 + $indice, 0)->toISOString(),
+            ],
+            $envios,
+            array_keys($envios),
+        );
+
+        $this->actingAs($this->operador)
+            ->post('/rutas', $this->payload(['paradas' => $paradas]))
+            ->assertRedirect(route('rutas.index'));
+
+        $despacho = Despacho::query()->sole();
+        DB::table('envios.envios')
+            ->where('id_envio', $envios[1]->id_envio)
+            ->update([
+                'estado_envio_id' => DB::table('envios.estados_envios')
+                    ->where('nombre_estado', 'ENTREGADO')
+                    ->value('id_estado'),
+            ]);
+
+        $this->actingAs($this->operador)
+            ->getJson("/rutas/mapa/datos?dias=0&estado=ENTREGADO&ruta={$despacho->id_despacho}")
+            ->assertOk()
+            ->assertJsonCount(2, 'rutas.0.paradas')
+            ->assertJsonPath('rutas.0.paradas.0.envio_id', $envios[0]->id_envio)
+            ->assertJsonPath('rutas.0.paradas.1.envio_id', $envios[1]->id_envio)
+            ->assertJsonPath('rutas.0.paradas.0.estado_envio', 'EN_CENTRO')
+            ->assertJsonPath('rutas.0.paradas.1.estado_envio', 'ENTREGADO');
+    }
+
+    public function test_el_seguimiento_usa_ubicaciones_de_sucursales_si_no_hay_ubicacion_reportada(): void
+    {
+        $territorios = DB::table('territorio.territorios')
+            ->whereIn('nombre_territorio', ['San Salvador', 'San Miguel'])
+            ->pluck('id_territorio', 'nombre_territorio');
+
+        $envios = [
+            Envio::factory()->hasta('EN_CENTRO')->create(),
+            Envio::factory()->hasta('EN_CENTRO')->create(),
+        ];
+        $territoriosDestino = [
+            $territorios['San Salvador'],
+            $territorios['San Miguel'],
+        ];
+
+        foreach ($territoriosDestino as $indice => $territorioId) {
+            DB::table('envios.envios')
+                ->where('id_envio', $envios[$indice]->id_envio)
+                ->update(['territorio_destino_id' => $territorioId]);
+        }
+
+        $coordenadasEsperadas = collect($territoriosDestino)
+            ->map(fn (int $territorioId) => DB::table('territorio.sucursales')
+                ->where('territorio_id', $territorioId)
+                ->whereNotNull('latitud')
+                ->whereNotNull('longitud')
+                ->selectRaw('AVG(latitud)::double precision as lat, AVG(longitud)::double precision as lng')
+                ->first())
+            ->values();
+
+        $paradas = array_map(
+            fn (Envio $envio, int $indice): array => [
+                'envio_id' => $envio->id_envio,
+                'orden' => $indice + 1,
+                'hora_estimada' => now()->setTime(9 + $indice, 0)->toISOString(),
+            ],
+            $envios,
+            array_keys($envios),
+        );
+
+        $this->actingAs($this->operador)
+            ->post('/rutas', $this->payload(['paradas' => $paradas]))
+            ->assertRedirect(route('rutas.index'));
+
+        $despacho = Despacho::query()->sole();
+        $respuesta = $this->actingAs($this->operador)
+            ->getJson("/rutas/mapa/datos?dias=0&ruta={$despacho->id_despacho}")
+            ->assertOk()
+            ->assertJsonPath('rutas.0.paradas.0.ubicacion_aproximada', true)
+            ->assertJsonPath('rutas.0.paradas.1.ubicacion_aproximada', true);
+
+        $this->assertNotNull(data_get($respuesta->json(), 'rutas.0.paradas.0.lat'));
+        $this->assertNotNull(data_get($respuesta->json(), 'rutas.0.paradas.0.lng'));
+        $this->assertNotNull(data_get($respuesta->json(), 'rutas.0.paradas.1.lat'));
+        $this->assertNotNull(data_get($respuesta->json(), 'rutas.0.paradas.1.lng'));
+        foreach ($coordenadasEsperadas as $indice => $coordenadas) {
+            $this->assertNotNull($coordenadas);
+            $this->assertEquals(
+                (float) $coordenadas->lat,
+                data_get($respuesta->json(), "rutas.0.paradas.{$indice}.lat"),
+            );
+            $this->assertEquals(
+                (float) $coordenadas->lng,
+                data_get($respuesta->json(), "rutas.0.paradas.{$indice}.lng"),
+            );
+        }
     }
 
     public function test_rechaza_un_envio_ya_despachado(): void

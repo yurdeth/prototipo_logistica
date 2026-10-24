@@ -20,6 +20,8 @@ export interface ParadaMapa {
     hora_real: string | null;
     lat: number | null;
     lng: number | null;
+    ubicacion_aproximada: boolean;
+    incidencias: number;
 }
 
 export interface EnvioMapa {
@@ -68,13 +70,6 @@ export interface SucursalMapa {
     punto: Punto | null;
 }
 
-export interface ZonaMapa {
-    id: number;
-    nombre: string;
-    tipo: string;
-    geometry: { type: string; coordinates: unknown };
-}
-
 export interface DatosMapa {
     generado: string;
     filtros: {
@@ -82,7 +77,6 @@ export interface DatosMapa {
         estado: string | null;
         ruta: number | null;
         territorio: number | null;
-        zona: number | null;
     };
     kpis: {
         total: number;
@@ -95,7 +89,6 @@ export interface DatosMapa {
         tasa_entrega: number;
     };
     estados: { estado: string; total: number }[];
-    zonas_soportadas: boolean;
     territorios: {
         id: number;
         nombre: string;
@@ -118,16 +111,12 @@ export interface DatosMapa {
             tipo: string;
             padre_id: number | null;
             padre: string | null;
-            tiene_zona: boolean;
         }[];
-        zonas: ZonaMapa[];
     };
     envios: EnvioMapa[];
     rutas: DespachoMapa[];
     sucursales: SucursalMapa[];
 }
-
-export type GeometriaPoligono = { type: 'Polygon'; coordinates: number[][][] };
 
 /* ───────── Estado de cada parada (según el estado de su envío) ───────── */
 export type ClaveVisual =
@@ -148,15 +137,39 @@ export interface Visual {
 }
 
 export const VISUALES: Record<ClaveVisual, Visual> = {
-    registrado: { clave: 'registrado', etiqueta: 'Registrado', color: colors.grisMedio },
-    recolectado: { clave: 'recolectado', etiqueta: 'Recolectado', color: colors.cian },
-    en_transito: { clave: 'en_transito', etiqueta: 'En tránsito', color: colors.azulClaro },
+    registrado: {
+        clave: 'registrado',
+        etiqueta: 'Registrado',
+        color: colors.grisMedio,
+    },
+    recolectado: {
+        clave: 'recolectado',
+        etiqueta: 'Recolectado',
+        color: colors.cian,
+    },
+    en_transito: {
+        clave: 'en_transito',
+        etiqueta: 'En tránsito',
+        color: colors.azulClaro,
+    },
     en_centro: { clave: 'en_centro', etiqueta: 'En centro', color: '#7C3AED' },
     en_ruta: { clave: 'en_ruta', etiqueta: 'En ruta', color: colors.amarillo },
-    entregado: { clave: 'entregado', etiqueta: 'Entregado', color: colors.verde },
-    devuelto: { clave: 'devuelto', etiqueta: 'Devuelto', color: colors.amarilloClaro },
+    entregado: {
+        clave: 'entregado',
+        etiqueta: 'Entregado',
+        color: colors.verde,
+    },
+    devuelto: {
+        clave: 'devuelto',
+        etiqueta: 'Devuelto',
+        color: colors.amarilloClaro,
+    },
     fallido: { clave: 'fallido', etiqueta: 'Fallido', color: colors.rojo },
-    desconocido: { clave: 'desconocido', etiqueta: 'Sin estado', color: colors.grisMedio },
+    desconocido: {
+        clave: 'desconocido',
+        etiqueta: 'Sin estado',
+        color: colors.grisMedio,
+    },
 };
 
 export const ORDEN_VISUALES: ClaveVisual[] = [
@@ -184,7 +197,9 @@ const CLAVE_POR_ESTADO_ENVIO: Record<string, ClaveVisual> = {
 
 /** Cualquier estado nulo o que no se conozca cae en "desconocido" (nunca lanza error). */
 export const estadoVisual = (estado?: string | null): Visual => {
-    const clave = estado ? CLAVE_POR_ESTADO_ENVIO[estado.toUpperCase()] : undefined;
+    const clave = estado
+        ? CLAVE_POR_ESTADO_ENVIO[estado.toUpperCase()]
+        : undefined;
 
     return VISUALES[clave ?? 'desconocido'];
 };
@@ -193,7 +208,9 @@ export const estadoVisual = (estado?: string | null): Visual => {
 export const etiquetaEnvio = (estado?: string | null): string => {
     if (!estado) return 'Sin estado';
 
-    const info = (estadoInfo as Record<string, { label: string } | undefined>)[estado];
+    const info = (estadoInfo as Record<string, { label: string } | undefined>)[
+        estado
+    ];
 
     return info?.label ?? estado;
 };
@@ -206,12 +223,28 @@ export interface VisualRuta {
 }
 
 const RUTAS: Record<string, VisualRuta> = {
-    PLANIFICADO: { etiqueta: 'Planificado', color: colors.amarillo, discontinua: true },
-    EN_CURSO: { etiqueta: 'En curso', color: colors.azulClaro, discontinua: false },
-    COMPLETADO: { etiqueta: 'Completado', color: colors.verde, discontinua: false },
+    PLANIFICADO: {
+        etiqueta: 'Planificado',
+        color: colors.amarillo,
+        discontinua: true,
+    },
+    EN_CURSO: {
+        etiqueta: 'En curso',
+        color: colors.azulClaro,
+        discontinua: false,
+    },
+    COMPLETADO: {
+        etiqueta: 'Completado',
+        color: colors.verde,
+        discontinua: false,
+    },
 };
 
-export const ESTADOS_DESPACHO = ['PLANIFICADO', 'EN_CURSO', 'COMPLETADO'] as const;
+export const ESTADOS_DESPACHO = [
+    'PLANIFICADO',
+    'EN_CURSO',
+    'COMPLETADO',
+] as const;
 
 export const visualRuta = (estado?: string | null): VisualRuta =>
     (estado && RUTAS[estado.toUpperCase()]) || {
@@ -237,7 +270,10 @@ export const fmtHora = (iso: string | null): string => {
 
     return Number.isNaN(fecha.getTime())
         ? '—'
-        : fecha.toLocaleTimeString('es-SV', { hour: '2-digit', minute: '2-digit' });
+        : fecha.toLocaleTimeString('es-SV', {
+              hour: '2-digit',
+              minute: '2-digit',
+          });
 };
 
 export const fmtDia = (valor: string | null): string => {
@@ -247,5 +283,9 @@ export const fmtDia = (valor: string | null): string => {
 
     return Number.isNaN(fecha.getTime())
         ? '—'
-        : fecha.toLocaleDateString('es-SV', { day: '2-digit', month: 'short', year: 'numeric' });
+        : fecha.toLocaleDateString('es-SV', {
+              day: '2-digit',
+              month: 'short',
+              year: 'numeric',
+          });
 };

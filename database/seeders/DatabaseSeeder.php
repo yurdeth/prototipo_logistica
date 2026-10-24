@@ -35,7 +35,6 @@ class DatabaseSeeder extends Seeder
         $this->call(UsuariosRolSeeder::class);
         $this->call(RedLogisticaSeeder::class);
         $this->call(HistoriaSeeder::class);
-        $this->call(ZonasTerritoriosSeeder::class);
 
         // User::factory(10)->create();
 

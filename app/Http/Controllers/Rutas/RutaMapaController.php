@@ -3,23 +3,21 @@
 namespace App\Http\Controllers\Rutas;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Rutas\GuardarZonaRequest;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 use Inertia\Response;
 
 /**
  * Mapa de rutas: lee los despachos reales (rutas.*) sin modificar el listado actual.
  *
- * Las paradas solo se ubican cuando un evento del envío tiene coordenadas reportadas.
+ * Las paradas priorizan coordenadas reportadas; si faltan, usan una referencia
+ * aproximada derivada de las ubicaciones de sucursales del territorio.
  */
 class RutaMapaController extends Controller
 {
@@ -34,18 +32,11 @@ class RutaMapaController extends Controller
         'FALLIDO',
     ];
 
-    /** Área permitida para una zona dibujada (m²): evita trazos accidentales o enormes. */
-    private const AREA_MIN = 1_000;
-
-    private const AREA_MAX = 25_000_000_000;
-
     /* ===================== PÁGINA ===================== */
 
     public function index(): Response
     {
-        return Inertia::render('rutas/RutasMapa', [
-            'territorios' => $this->territorios($this->tieneColumnaZona()),
-        ]);
+        return Inertia::render('rutas/RutasMapa');
     }
 
     /* ===================== DATOS (JSON) ===================== */
@@ -57,33 +48,15 @@ class RutaMapaController extends Controller
             'estado' => ['nullable', 'in:'.implode(',', self::ESTADOS_ENVIO)],
             'ruta' => ['nullable', 'integer', 'min:1'],
             'territorio' => ['nullable', 'integer', 'min:1'],
-            'zona' => ['nullable', 'integer', 'min:1'],
         ]);
         $filtros = [
             'dias' => (int) ($validos['dias'] ?? 7),
             'estado' => $validos['estado'] ?? null,
             'ruta' => isset($validos['ruta']) ? (int) $validos['ruta'] : null,
             'territorio' => isset($validos['territorio']) ? (int) $validos['territorio'] : null,
-            'zona' => isset($validos['zona']) ? (int) $validos['zona'] : null,
         ];
-        $tieneZona = $this->tieneColumnaZona();
-
-        if ($filtros['zona'] !== null) {
-            abort_unless($tieneZona, 422, 'La base de datos no tiene zonas geográficas configuradas.');
-            abort_unless(
-                DB::table('territorio.territorios')
-                    ->where('id_territorio', $filtros['zona'])
-                    ->whereNotNull('zona')
-                    ->exists(),
-                422,
-                'La zona seleccionada no existe.'
-            );
-        }
         $filtros['territorio_ids'] = $filtros['territorio'] !== null
             ? $this->territoriosDescendientes($filtros['territorio'])
-            : null;
-        $filtros['zona_ids'] = $filtros['zona'] !== null
-            ? $this->territoriosDescendientes($filtros['zona'])
             : null;
 
         $desde = $filtros['dias'] > 0
@@ -214,7 +187,11 @@ class RutaMapaController extends Controller
             ->values();
 
         $idsRuta = $envios->pluck('ruta_id')->filter()->unique()->values()->all();
-        $rutas = $this->rutas($idsRuta, $envios);
+        if ($filtros['ruta'] !== null) {
+            $idsRuta[] = $filtros['ruta'];
+            $idsRuta = array_values(array_unique($idsRuta));
+        }
+        $rutas = $this->rutas($idsRuta);
         $idsEnvio = $envios->pluck('id')->all();
         $incidencias = $this->incidenciasFiltradas($idsEnvio, $idsRuta);
 
@@ -236,12 +213,10 @@ class RutaMapaController extends Controller
                 'total' => (int) ($porEstado[$estado] ?? 0),
             ])->values(),
             'territorios' => $territorios,
-            'zonas_soportadas' => $tieneZona,
             'catalogos' => [
                 'estados' => self::ESTADOS_ENVIO,
                 'rutas' => $this->opcionesRuta($desde),
-                'territorios' => $this->territorios($tieneZona),
-                'zonas' => $this->zonas($tieneZona),
+                'territorios' => $this->territorios(),
             ],
             'envios' => $envios,
             'rutas' => $rutas,
@@ -249,47 +224,7 @@ class RutaMapaController extends Controller
         ]);
     }
 
-    /* ===================== ZONAS ===================== */
-
-    public function guardarZona(GuardarZonaRequest $request, int $territorio): RedirectResponse
-    {
-        abort_unless($this->tieneColumnaZona(), 404, 'La base de datos no tiene soporte para zonas geográficas.');
-        abort_unless(DB::table('territorio.territorios')->where('id_territorio', $territorio)->exists(), 404);
-
-        $geojson = json_encode($request->geometriaLimpia(), JSON_THROW_ON_ERROR);
-
-        $fila = DB::selectOne(
-            'SELECT (CASE WHEN ST_IsValid(g) THEN 1 ELSE 0 END) AS valida, ST_Area(g::geography) AS area
-             FROM (SELECT ST_SetSRID(ST_GeomFromGeoJSON(?), 4326) AS g) q',
-            [$geojson]
-        );
-
-        if (! $fila || (int) $fila->valida !== 1) {
-            return back()->withErrors(['zona' => 'La zona no es válida: el contorno se cruza consigo mismo.']);
-        }
-        if ((float) $fila->area < self::AREA_MIN) {
-            return back()->withErrors(['zona' => 'La zona es demasiado pequeña. Dibújala más grande.']);
-        }
-        if ((float) $fila->area > self::AREA_MAX) {
-            return back()->withErrors(['zona' => 'La zona es demasiado grande para un territorio.']);
-        }
-
-        DB::update(
-            'UPDATE territorio.territorios
-             SET zona = ST_SetSRID(ST_GeomFromGeoJSON(?), 4326)::geography
-             WHERE id_territorio = ?',
-            [$geojson, $territorio]
-        );
-
-        return back()->with('success', 'Zona guardada correctamente.');
-    }
-
     /* ===================== CONSULTAS DE APOYO ===================== */
-
-    private function tieneColumnaZona(): bool
-    {
-        return Schema::hasColumn('territorio.territorios', 'zona');
-    }
 
     /** @return list<int> */
     private function territoriosDescendientes(int $territorio): array
@@ -312,23 +247,18 @@ class RutaMapaController extends Controller
             ->all();
     }
 
-    /** @return Collection<int, array{id: int, nombre: string, tipo: string, padre_id: int|null, padre: string|null, tiene_zona: bool}> */
-    private function territorios(bool $tieneZona): Collection
+    /** @return Collection<int, array{id: int, nombre: string, tipo: string, padre_id: int|null, padre: string|null}> */
+    private function territorios(): Collection
     {
-        $tieneZonaSelect = $tieneZona
-            ? 'CASE WHEN t.zona IS NULL THEN false ELSE true END as tiene_zona'
-            : 'false as tiene_zona';
-
         return DB::table('territorio.territorios as t')
             ->leftJoin('territorio.territorios as padre', 'padre.id_territorio', '=', 't.territorio_padre_id')
-            ->selectRaw("
+            ->selectRaw('
                 t.id_territorio as id,
                 t.nombre_territorio as nombre,
                 t.tipo_territorio as tipo,
                 t.territorio_padre_id as padre_id,
-                padre.nombre_territorio as padre,
-                {$tieneZonaSelect}
-            ")
+                padre.nombre_territorio as padre
+            ')
             ->orderBy('t.tipo_territorio')
             ->orderBy('t.nombre_territorio')
             ->get()
@@ -338,7 +268,6 @@ class RutaMapaController extends Controller
                 'tipo' => $t->tipo,
                 'padre_id' => $t->padre_id !== null ? (int) $t->padre_id : null,
                 'padre' => $t->padre,
-                'tiene_zona' => (bool) $t->tiene_zona,
             ])
             ->values();
     }
@@ -390,7 +319,7 @@ class RutaMapaController extends Controller
             ->leftJoinSub($incidenciasPorEnvio, 'ie', 'ie.envio_id', '=', 'e.id_envio');
     }
 
-    /** @param array{dias: int, estado: string|null, ruta: int|null, territorio: int|null, zona: int|null, territorio_ids: list<int>|null, zona_ids: list<int>|null} $filtros */
+    /** @param array{dias: int, estado: string|null, ruta: int|null, territorio: int|null, territorio_ids: list<int>|null} $filtros */
     private function aplicarFiltros(Builder $consulta, array $filtros, ?CarbonInterface $desde): Builder
     {
         if ($desde !== null) {
@@ -401,9 +330,6 @@ class RutaMapaController extends Controller
         }
         if ($filtros['territorio_ids'] !== null) {
             $consulta->whereIn('t.id_territorio', $filtros['territorio_ids']);
-        }
-        if ($filtros['zona_ids'] !== null) {
-            $consulta->whereIn('t.id_territorio', $filtros['zona_ids']);
         }
         if ($filtros['ruta'] !== null) {
             $consulta->whereExists(fn (Builder $subconsulta) => $subconsulta
@@ -418,10 +344,9 @@ class RutaMapaController extends Controller
 
     /**
      * @param  list<int>  $ids
-     * @param  Collection<int, array<string, mixed>>  $envios
      * @return Collection<int, array<string, mixed>>
      */
-    private function rutas(array $ids, Collection $envios): Collection
+    private function rutas(array $ids): Collection
     {
         if ($ids === []) {
             return collect();
@@ -431,9 +356,65 @@ class RutaMapaController extends Controller
             ->whereNotNull('despacho_id')
             ->selectRaw('despacho_id, count(*) as total, COALESCE(sum(minutos_retraso), 0) as minutos_retraso')
             ->groupBy('despacho_id');
-        $enviosPorRuta = $envios
-            ->filter(fn (array $envio) => $envio['ruta_id'] !== null)
-            ->groupBy('ruta_id');
+        $incidenciasPorEnvio = DB::table('rutas.incidencias')
+            ->whereNotNull('envio_id')
+            ->selectRaw('envio_id, count(*) as total')
+            ->groupBy('envio_id');
+        $posicionReportada = DB::table('envios.envio_eventos as ev')
+            ->join('envios.estados_envios as se', 'se.id_estado', '=', 'ev.estado_envio_id')
+            ->whereColumn('ev.envio_id', 'e.id_envio')
+            ->whereNotNull('ev.ubicacion')
+            ->where('se.nombre_estado', '<>', 'REGISTRADO')
+            ->orderByDesc('ev.ocurrido_en')
+            ->orderByDesc('ev.id_evento')
+            ->limit(1)
+            ->selectRaw('ST_Y(ev.ubicacion::geometry) as lat, ST_X(ev.ubicacion::geometry) as lng');
+        $centroSucursales = DB::table('territorio.sucursales as su')
+            ->whereColumn('su.territorio_id', 't.id_territorio')
+            ->whereNotNull('su.latitud')
+            ->whereNotNull('su.longitud')
+            ->selectRaw('AVG(su.latitud)::double precision as lat, AVG(su.longitud)::double precision as lng');
+        $centroSucursalesPadre = DB::table('territorio.sucursales as su')
+            ->whereColumn('su.territorio_id', 'padre.id_territorio')
+            ->whereNotNull('su.latitud')
+            ->whereNotNull('su.longitud')
+            ->selectRaw('AVG(su.latitud)::double precision as lat, AVG(su.longitud)::double precision as lng');
+
+        $paradasPorRuta = DB::table('rutas.despacho_paradas as p')
+            ->join('envios.envios as e', 'e.id_envio', '=', 'p.envio_id')
+            ->join('envios.estados_envios as s', 's.id_estado', '=', 'e.estado_envio_id')
+            ->join('territorio.territorios as t', 't.id_territorio', '=', 'e.territorio_destino_id')
+            ->leftJoin('territorio.territorios as padre', 'padre.id_territorio', '=', 't.territorio_padre_id')
+            ->leftJoinLateral($posicionReportada, 'pos')
+            ->leftJoinLateral($centroSucursales, 'centro')
+            ->leftJoinLateral($centroSucursalesPadre, 'centro_padre')
+            ->leftJoinSub($incidenciasPorEnvio, 'ie', 'ie.envio_id', '=', 'e.id_envio')
+            ->whereIn('p.despacho_id', $ids)
+            ->orderBy('p.despacho_id')
+            ->orderBy('p.orden');
+
+        $paradasPorRuta->selectRaw('
+            COALESCE(pos.lat, centro.lat, centro_padre.lat) as lat,
+            COALESCE(pos.lng, centro.lng, centro_padre.lng) as lng,
+            (
+                pos.lat IS NULL
+                AND (centro.lat IS NOT NULL OR centro_padre.lat IS NOT NULL)
+            ) as ubicacion_aproximada
+        ');
+
+        $paradasPorRuta = $paradasPorRuta->get([
+            'p.despacho_id',
+            'e.id_envio',
+            'p.orden',
+            'e.codigo_guia',
+            't.nombre_territorio as destino',
+            'e.direccion_destino as direccion',
+            's.nombre_estado as estado_envio',
+            'p.hora_estimada',
+            'p.hora_real',
+            'ie.total as incidencias',
+        ])
+            ->groupBy('despacho_id');
 
         return DB::table('rutas.despachos as d')
             ->join('rutas.estados_despachos as ed', 'ed.id_estado', '=', 'd.estado_despacho_id')
@@ -454,21 +435,22 @@ class RutaMapaController extends Controller
                 'inc.total as incidencias',
                 'inc.minutos_retraso',
             ])
-            ->map(function ($d) use ($enviosPorRuta): array {
-                $paradas = $enviosPorRuta->get((int) $d->id_despacho, collect())
-                    ->sortBy('orden')
-                    ->map(fn (array $envio) => [
-                        'id' => $envio['id'],
-                        'orden' => $envio['orden'],
-                        'envio_id' => $envio['id'],
-                        'codigo_guia' => $envio['codigo_guia'],
-                        'destino' => $envio['territorio'],
-                        'direccion' => $envio['direccion'],
-                        'estado_envio' => $envio['estado'],
-                        'hora_estimada' => $envio['hora_estimada'],
-                        'hora_real' => $envio['hora_real'],
-                        'lat' => $envio['lat'],
-                        'lng' => $envio['lng'],
+            ->map(function ($d) use ($paradasPorRuta): array {
+                $paradas = $paradasPorRuta->get((int) $d->id_despacho, collect())
+                    ->map(fn ($parada) => [
+                        'id' => (int) $parada->id_envio,
+                        'orden' => (int) $parada->orden,
+                        'envio_id' => (int) $parada->id_envio,
+                        'codigo_guia' => $parada->codigo_guia,
+                        'destino' => $parada->destino,
+                        'direccion' => $parada->direccion,
+                        'estado_envio' => $parada->estado_envio,
+                        'hora_estimada' => $this->iso($parada->hora_estimada),
+                        'hora_real' => $this->iso($parada->hora_real),
+                        'lat' => $this->numero($parada->lat),
+                        'lng' => $this->numero($parada->lng),
+                        'ubicacion_aproximada' => (bool) $parada->ubicacion_aproximada,
+                        'incidencias' => (int) ($parada->incidencias ?? 0),
                     ])
                     ->values();
 
@@ -550,29 +532,6 @@ class RutaMapaController extends Controller
                 'direccion' => $s->direccion,
                 'activa' => (bool) $s->activa,
                 'punto' => $this->punto($s->latitud, $s->longitud),
-            ])
-            ->values()
-            ->all();
-    }
-
-    /** @return list<array<string, mixed>> */
-    private function zonas(bool $tieneZona): array
-    {
-        if (! $tieneZona) {
-            return [];
-        }
-
-        return DB::table('territorio.territorios')
-            ->whereNotNull('zona')
-            ->orderBy('nombre_territorio')
-            ->selectRaw('id_territorio as id, nombre_territorio as nombre, tipo_territorio as tipo,
-                ST_AsGeoJSON(zona::geometry, 6) as geojson')
-            ->get()
-            ->map(fn ($z) => [
-                'id' => (int) $z->id,
-                'nombre' => $z->nombre,
-                'tipo' => $z->tipo,
-                'geometry' => json_decode((string) $z->geojson, true),
             ])
             ->values()
             ->all();

@@ -9,7 +9,6 @@ import {
 } from 'vue';
 import type * as Leaflet from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import 'leaflet-draw/dist/leaflet.draw.css';
 import { colors } from '@/UI/Colors';
 import {
     ESTADOS_DESPACHO,
@@ -23,29 +22,24 @@ import {
     type ClaveVisual,
     type DespachoMapa,
     type EnvioMapa,
-    type GeometriaPoligono,
     type ParadaMapa,
     type SucursalMapa,
     type Visual,
     type VisualRuta,
-    type ZonaMapa,
 } from '@/config/Rutas/Mapa';
 
-// Mapa de rutas con Leaflet. Recibe los datos ya filtrados y los dibuja:
-// zonas, sucursales, una polilínea por despacho y un marcador por parada.
+// Mapa de rutas con Leaflet: sucursales, conexiones secuenciales y paradas.
 const props = defineProps<{
     sucursales: SucursalMapa[];
     despachos: DespachoMapa[];
     envios: EnvioMapa[];
-    zonas: ZonaMapa[];
     seleccionado: number | null;
-    modoZonas: boolean;
-    mostrarRutas: boolean;
+    paradaSeleccionadaId: number | null;
+    mostrarConexiones: boolean;
 }>();
 
 const emit = defineEmits<{
     seleccionar: [id: number];
-    dibujada: [geometria: GeometriaPoligono];
 }>();
 
 const CENTRO_INICIAL: [number, number] = [13.7, -89.2]; // El Salvador
@@ -62,22 +56,16 @@ const leyendaAbierta = ref(false);
 // Los objetos de Leaflet se guardan en variables normales: Vue no debe convertirlos en reactivos.
 let L: typeof Leaflet;
 let mapa: Leaflet.Map | null = null;
-let capaZonas: Leaflet.LayerGroup;
 let capaSucursales: Leaflet.LayerGroup;
 let capaRutas: Leaflet.LayerGroup;
 let capaParadas: Leaflet.LayerGroup;
-let capaBorrador: Leaflet.FeatureGroup;
-let controlDibujo: Leaflet.Control | null = null;
 let observador: ResizeObserver | null = null;
 let firmaBase = '';
 let ajustado = false;
-const rutas = new Map<number, Leaflet.Polyline>();
 
 /* ───────── Posiciones ───────── */
 type Coord = [number, number];
 
-// Varias paradas en la misma zona caerían exactamente en el mismo punto: se separan un poco
-// (siempre igual para la misma parada) para que se puedan ver y pulsar una por una.
 const posicion = (lat: number | null, lng: number | null): Coord | null => {
     if (lat === null || lng === null) return null;
     return [lat, lng];
@@ -88,31 +76,39 @@ const posicionParada = (p: ParadaMapa): Coord | null => posicion(p.lat, p.lng);
 const posicionEnvio = (envio: EnvioMapa): Coord | null =>
     posicion(envio.lat, envio.lng);
 
-const puntosRuta = (d: DespachoMapa): Coord[] => {
-    const puntos: Coord[] = [];
-
-    if (d.origen) puntos.push([d.origen.lat, d.origen.lng]);
-    for (const p of d.paradas) {
-        const pos = posicionParada(p);
-        if (pos) puntos.push(pos);
-    }
-
-    return puntos;
-};
+const puntosSecuenciaRuta = (d: DespachoMapa): (Coord | null)[] => [
+    d.origen ? [d.origen.lat, d.origen.lng] : null,
+    ...d.paradas.map(posicionParada),
+];
 
 /* ───────── Iconos y popups ───────── */
-const iconoParada = (v: Visual, orden: number | null): Leaflet.DivIcon =>
-    L.divIcon({
+const iconoParada = (
+    v: Visual,
+    orden: number | null,
+    seleccionada: boolean,
+    destinoFinal: boolean,
+    ubicacionAproximada = false,
+): Leaflet.DivIcon => {
+    const borde = seleccionada
+        ? '#0f172a'
+        : ubicacionAproximada
+          ? '#d97706'
+          : destinoFinal
+            ? '#7c3aed'
+            : '#ffffff';
+
+    return L.divIcon({
         className: 'marcador-parada',
         iconSize: [30, 38],
         iconAnchor: [15, 37],
         popupAnchor: [0, -34],
         html: `<svg width="30" height="38" viewBox="0 0 30 38" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <path d="M15 1C7.8 1 2 6.8 2 14c0 9.5 13 23 13 23s13-13.5 13-23C28 6.8 22.2 1 15 1z" fill="${v.color}" stroke="#ffffff" stroke-width="2"/>
+            <path d="M15 1C7.8 1 2 6.8 2 14c0 9.5 13 23 13 23s13-13.5 13-23C28 6.8 22.2 1 15 1z" fill="${v.color}" stroke="${borde}" stroke-width="${seleccionada || destinoFinal || ubicacionAproximada ? 3 : 2}" ${ubicacionAproximada ? 'stroke-dasharray="3 2"' : ''}/>
             <circle cx="15" cy="14" r="7" fill="#ffffff"/>
             <text x="15" y="17.5" text-anchor="middle" font-size="10" font-weight="700" font-family="system-ui,sans-serif" fill="#1f2937">${orden ?? '•'}</text>
         </svg>`,
     });
+};
 
 const iconoSucursal = (activa: boolean): Leaflet.DivIcon =>
     L.divIcon({
@@ -144,6 +140,22 @@ const popupEnvio = (envio: EnvioMapa): string => {
     </div>`;
 };
 
+const popupParada = (parada: ParadaMapa): string =>
+    `<div style="min-width:210px;font:13px/1.4 system-ui,sans-serif;color:#0f172a">
+        <div style="font-weight:700;margin-bottom:6px;font-family:ui-monospace,monospace">${escapeHtml(parada.codigo_guia)}</div>
+        ${fila('Parada', parada.orden)}
+        ${fila('Destino', parada.destino)}
+        ${fila('Dirección', parada.direccion)}
+        ${fila('Estado', etiquetaEnvio(parada.estado_envio))}
+        ${fila('Incidencias', parada.incidencias)}
+        ${fila(
+            'Ubicación',
+            parada.ubicacion_aproximada
+                ? 'Aproximada: referencia territorial o sucursales'
+                : 'Última ubicación reportada',
+        )}
+    </div>`;
+
 const popupSucursal = (s: SucursalMapa): string =>
     `<div style="min-width:190px;font:13px/1.4 system-ui,sans-serif;color:#0f172a">
         <div style="font-weight:700;margin-bottom:4px">${escapeHtml(s.nombre)}</div>
@@ -164,43 +176,11 @@ const popupRuta = (d: DespachoMapa, v: VisualRuta): string => {
     </div>`;
 };
 
-/* ───────── Dibujo de zonas, sucursales y rutas ───────── */
+/* ───────── Dibujo de sucursales y rutas ───────── */
 const dibujarBase = () => {
-    const firma = JSON.stringify([
-        props.zonas,
-        props.sucursales,
-        props.modoZonas,
-    ]);
+    const firma = JSON.stringify(props.sucursales);
     if (firma === firmaBase) return;
     firmaBase = firma;
-
-    capaZonas.clearLayers();
-    for (const z of props.zonas) {
-        try {
-            const zona = L.geoJSON(
-                {
-                    type: 'Feature',
-                    properties: {},
-                    geometry: z.geometry,
-                } as never,
-                {
-                    style: {
-                        color: colors.azulClaro,
-                        weight: 1.5,
-                        opacity: 0.8,
-                        fillColor: colors.azulClaro,
-                        fillOpacity: 0.08,
-                    },
-                    // Mientras se dibuja, las zonas existentes no deben interceptar los clics.
-                    interactive: !props.modoZonas,
-                },
-            );
-            zona.bindTooltip(escapeHtml(z.nombre), { sticky: true });
-            capaZonas.addLayer(zona);
-        } catch {
-            // Una geometría dañada no debe romper el resto del mapa.
-        }
-    }
 
     capaSucursales.clearLayers();
     for (const s of props.sucursales) {
@@ -216,64 +196,73 @@ const dibujarBase = () => {
     }
 };
 
-const estiloRuta = (
-    v: VisualRuta,
-    seleccionada: boolean,
-    hayseleccion: boolean,
-) => ({
-    color: v.color,
-    weight: seleccionada ? 7 : 4,
-    opacity: hayseleccion && !seleccionada ? 0.3 : 0.9,
-    dashArray: v.discontinua ? '8 8' : undefined,
-    lineJoin: 'round' as const,
-});
-
 const sincronizarRutas = () => {
-    const rutasVistas = new Set<number>();
-    const hayseleccion = props.seleccionado !== null;
+    capaRutas.clearLayers();
 
     for (const d of props.despachos) {
         const v = visualRuta(d.estado);
         const esSeleccion = d.id === props.seleccionado;
-        const puntos = puntosRuta(d);
+        if (!props.mostrarConexiones) continue;
 
-        // Polilínea del despacho: origen y paradas en orden (necesita al menos dos puntos).
-        if ((props.mostrarRutas || esSeleccion) && puntos.length >= 2) {
-            rutasVistas.add(d.id);
-            const estilo = estiloRuta(v, esSeleccion, hayseleccion);
-            let linea = rutas.get(d.id);
+        const puntos = puntosSecuenciaRuta(d);
+        const indiceParadaActual = esSeleccion
+            ? d.paradas.findIndex(
+                  (parada) => parada.envio_id === props.paradaSeleccionadaId,
+              )
+            : -1;
+        const indiceTramoActual = indiceParadaActual;
 
-            if (linea) {
-                linea.setLatLngs(puntos);
-                linea.setStyle(estilo);
-                linea.setPopupContent(popupRuta(d, v));
-            } else {
-                linea = L.polyline(puntos, estilo)
-                    .bindPopup(popupRuta(d, v), { maxWidth: 280 })
-                    .addTo(capaRutas);
-                linea.on('click', () => emit('seleccionar', d.id));
-                rutas.set(d.id, linea);
-            }
+        for (let indice = 0; indice < puntos.length - 1; indice++) {
+            const inicio = puntos[indice];
+            const fin = puntos[indice + 1];
+            if (!inicio || !fin) continue;
 
-            linea.bindTooltip(
-                `${escapeHtml(d.codigo)} · ${escapeHtml(v.etiqueta)}`,
-                { sticky: true },
-            );
-            if (esSeleccion) linea.bringToFront();
-        }
-    }
+            const esTramoActual = esSeleccion && indice === indiceTramoActual;
+            const esTramoAnterior =
+                esSeleccion &&
+                indiceParadaActual >= 0 &&
+                indice < indiceTramoActual;
+            const color = esTramoActual
+                ? colors.azulClaro
+                : esTramoAnterior
+                  ? colors.verde
+                  : esSeleccion
+                    ? colors.grisMedio
+                    : v.color;
+            const etiquetaTramo = esTramoActual
+                ? 'Tramo de la parada seleccionada'
+                : esTramoAnterior
+                  ? 'Tramo anterior en la revisión'
+                  : esSeleccion
+                    ? 'Tramo pendiente en la revisión'
+                    : v.etiqueta;
 
-    // Se quitan las rutas que ya no existen (por ejemplo, al cambiar un filtro).
-    for (const [id, linea] of rutas) {
-        if (!rutasVistas.has(id)) {
-            capaRutas.removeLayer(linea);
-            rutas.delete(id);
+            const linea = L.polyline([inicio, fin], {
+                color,
+                weight: esTramoActual ? 7 : esSeleccion ? 4 : 3,
+                opacity: esSeleccion ? 0.95 : 0.55,
+                dashArray:
+                    esSeleccion && !esTramoActual && !esTramoAnterior
+                        ? '7 7'
+                        : v.discontinua && !esSeleccion
+                          ? '8 8'
+                          : undefined,
+                lineJoin: 'round',
+            })
+                .bindPopup(popupRuta(d, v), { maxWidth: 280 })
+                .bindTooltip(
+                    `${escapeHtml(d.codigo)} · ${escapeHtml(etiquetaTramo)}`,
+                    { sticky: true },
+                )
+                .addTo(capaRutas);
+            linea.on('click', () => emit('seleccionar', d.id));
         }
     }
 };
 
 const sincronizarEnvios = () => {
     capaParadas.clearLayers();
+    const idsMarcados = new Set<number>();
 
     const ubicados = props.envios.filter(
         (envio) => envio.lat !== null && envio.lng !== null,
@@ -283,14 +272,28 @@ const sincronizarEnvios = () => {
         const pos = posicionEnvio(envio);
         if (!pos) continue;
 
+        const despacho = props.despachos.find(
+            (ruta) => ruta.id === envio.ruta_id,
+        );
+        const indiceParada =
+            despacho?.paradas.findIndex(
+                (parada) => parada.envio_id === envio.id,
+            ) ?? -1;
+        const seleccionada = envio.id === props.paradaSeleccionadaId;
+        const destinoFinal =
+            indiceParada >= 0 &&
+            indiceParada === (despacho?.paradas.length ?? 0) - 1;
+        idsMarcados.add(envio.id);
         const visual = estadoVisual(envio.estado);
         const marcador = L.marker(pos, {
-            icon: iconoParada(visual, envio.orden),
-            title: `${envio.codigo_guia} · ${etiquetaEnvio(envio.estado)}`,
+            icon: iconoParada(visual, envio.orden, seleccionada, destinoFinal),
+            title: `${seleccionada ? 'Parada seleccionada · ' : ''}${destinoFinal ? 'Destino final · ' : ''}${envio.codigo_guia} · ${etiquetaEnvio(envio.estado)}`,
             riseOnHover: true,
+            zIndexOffset: seleccionada ? 1000 : 0,
             opacity:
                 props.seleccionado !== null &&
-                envio.ruta_id !== props.seleccionado
+                envio.ruta_id !== props.seleccionado &&
+                !seleccionada
                     ? 0.45
                     : 1,
         })
@@ -301,6 +304,37 @@ const sincronizarEnvios = () => {
             marcador.on('click', () => emit('seleccionar', rutaId));
         }
     }
+
+    const rutaSeleccionada = props.despachos.find(
+        (despacho) => despacho.id === props.seleccionado,
+    );
+    if (!rutaSeleccionada) return;
+
+    for (const parada of rutaSeleccionada.paradas) {
+        if (idsMarcados.has(parada.envio_id)) continue;
+        const pos = posicionParada(parada);
+        if (!pos) continue;
+
+        const seleccionada = parada.envio_id === props.paradaSeleccionadaId;
+        const destinoFinal =
+            rutaSeleccionada.paradas[rutaSeleccionada.paradas.length - 1]
+                ?.envio_id === parada.envio_id;
+        const marcador = L.marker(pos, {
+            icon: iconoParada(
+                estadoVisual(parada.estado_envio),
+                parada.orden,
+                seleccionada,
+                destinoFinal,
+                parada.ubicacion_aproximada,
+            ),
+            title: `${seleccionada ? 'Parada seleccionada · ' : ''}${destinoFinal ? 'Destino final · ' : ''}${parada.ubicacion_aproximada ? 'Ubicación territorial aproximada · ' : ''}${parada.codigo_guia ?? ''}`,
+            riseOnHover: true,
+            zIndexOffset: seleccionada ? 1000 : 0,
+        })
+            .bindPopup(popupParada(parada), { maxWidth: 300 })
+            .addTo(capaParadas);
+        marcador.on('click', () => emit('seleccionar', rutaSeleccionada.id));
+    }
 };
 
 /** Centra el mapa en lo que hay: la selección, o todas las rutas y marcadores visibles. */
@@ -308,6 +342,49 @@ const ajustarVista = () => {
     if (!mapa) return;
 
     const sel = props.seleccionado;
+    const rutaSeleccionada = props.despachos.find(
+        (despacho) => despacho.id === sel,
+    );
+    if (rutaSeleccionada && props.paradaSeleccionadaId !== null) {
+        const paradaRuta = rutaSeleccionada.paradas.find(
+            (parada) => parada.envio_id === props.paradaSeleccionadaId,
+        );
+        let posicionSeleccionada = paradaRuta
+            ? posicionParada(paradaRuta)
+            : null;
+        if (!posicionSeleccionada) {
+            const envioSeleccionado = props.envios.find(
+                (envio) => envio.id === props.paradaSeleccionadaId,
+            );
+            posicionSeleccionada = envioSeleccionado
+                ? posicionEnvio(envioSeleccionado)
+                : null;
+        }
+
+        if (posicionSeleccionada) {
+            mapa.flyTo(posicionSeleccionada, Math.max(mapa.getZoom(), 12), {
+                animate: true,
+                duration: 0.8,
+                easeLinearity: 0.25,
+            });
+            return;
+        }
+
+        const puntosRuta = rutaSeleccionada.paradas.flatMap((parada) => {
+            const punto = posicionParada(parada);
+            return punto ? [punto] : [];
+        });
+        if (puntosRuta.length) {
+            mapa.fitBounds(L.latLngBounds(puntosRuta), {
+                padding: [48, 48],
+                maxZoom: 14,
+                animate: true,
+                duration: 0.8,
+            });
+            return;
+        }
+    }
+
     const envios =
         sel !== null
             ? props.envios.filter((envio) => envio.ruta_id === sel)
@@ -322,7 +399,13 @@ const ajustarVista = () => {
             sel !== null
                 ? props.despachos.filter((d) => d.id === sel)
                 : props.despachos;
-        puntos.push(...lista.flatMap(puntosRuta));
+        puntos.push(
+            ...lista.flatMap((despacho) =>
+                puntosSecuenciaRuta(despacho).filter(
+                    (punto): punto is Coord => punto !== null,
+                ),
+            ),
+        );
     }
 
     if (!puntos.length && sel === null) {
@@ -358,91 +441,6 @@ const sincronizar = () => {
     }
 };
 
-/* ───────── Dibujo de zonas (Leaflet.draw) ───────── */
-interface TextosDibujo {
-    draw: {
-        toolbar: {
-            actions: { title: string; text: string };
-            finish: { title: string; text: string };
-            undo: { title: string; text: string };
-            buttons: { polygon: string };
-        };
-        handlers: {
-            polygon: { tooltip: { start: string; cont: string; end: string } };
-        };
-    };
-}
-
-interface EventoDibujoCreado {
-    layer: Leaflet.Layer;
-}
-
-const traducirDibujo = () => {
-    const t = (L as unknown as { drawLocal: TextosDibujo }).drawLocal;
-
-    t.draw.toolbar.actions = { title: 'Cancelar el dibujo', text: 'Cancelar' };
-    t.draw.toolbar.finish = { title: 'Terminar el dibujo', text: 'Terminar' };
-    t.draw.toolbar.undo = {
-        title: 'Quitar el último punto',
-        text: 'Quitar último punto',
-    };
-    t.draw.toolbar.buttons.polygon = 'Dibujar una zona';
-    t.draw.handlers.polygon.tooltip = {
-        start: 'Haz clic para empezar a dibujar la zona.',
-        cont: 'Haz clic para continuar dibujando la zona.',
-        end: 'Haz clic en el primer punto para cerrar la zona.',
-    };
-};
-
-const alCrearZona = (evento: Leaflet.LeafletEvent) => {
-    const { layer } = evento as unknown as EventoDibujoCreado;
-
-    capaBorrador.clearLayers();
-    capaBorrador.addLayer(layer);
-
-    const geometria = (layer as Leaflet.Polygon).toGeoJSON()
-        .geometry as GeometriaPoligono;
-    emit('dibujada', geometria);
-};
-
-const activarDibujo = () => {
-    if (!mapa || controlDibujo) return;
-
-    capaBorrador.clearLayers();
-    const ControlDraw = (
-        L.Control as unknown as {
-            Draw: new (options: object) => Leaflet.Control;
-        }
-    ).Draw;
-    controlDibujo = new ControlDraw({
-        position: 'topright',
-        draw: {
-            polygon: {
-                allowIntersection: false,
-                showArea: false, // showArea falla en leaflet-draw 1.0.4
-                shapeOptions: { color: colors.azulClaro, weight: 3 },
-            },
-            polyline: false,
-            rectangle: false,
-            circle: false,
-            marker: false,
-            circlemarker: false,
-        },
-        edit: false,
-    });
-    mapa.addControl(controlDibujo);
-};
-
-const desactivarDibujo = () => {
-    if (!mapa || !controlDibujo) return;
-
-    mapa.removeControl(controlDibujo);
-    controlDibujo = null;
-    capaBorrador.clearLayers();
-};
-
-const limpiarBorrador = () => capaBorrador?.clearLayers();
-
 /* ───────── Ciclo de vida ───────── */
 onMounted(async () => {
     // Leaflet se carga solo al abrir esta vista (no pesa en el resto de la aplicación).
@@ -450,14 +448,7 @@ onMounted(async () => {
     L = ((modulo as unknown as { default?: typeof Leaflet }).default ??
         modulo) as typeof Leaflet;
 
-    // Leaflet.draw es un plugin clásico que espera encontrar L como variable global.
-    (window as unknown as { L: typeof Leaflet }).L = L;
-    // @ts-expect-error leaflet-draw no incluye declaraciones de tipos.
-    await import('leaflet-draw');
-
     if (!contenedor.value) return; // la vista se cerró mientras se cargaba
-
-    traducirDibujo();
 
     mapa = L.map(contenedor.value, {
         center: CENTRO_INICIAL,
@@ -477,13 +468,9 @@ onMounted(async () => {
             '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
     }).addTo(mapa);
 
-    capaZonas = L.layerGroup().addTo(mapa);
     capaRutas = L.layerGroup().addTo(mapa);
     capaSucursales = L.layerGroup().addTo(mapa);
     capaParadas = L.layerGroup().addTo(mapa);
-    capaBorrador = L.featureGroup().addTo(mapa);
-
-    mapa.on('draw:created', alCrearZona);
 
     // El mapa se redimensiona con su contenedor (por ejemplo, al cambiar el ancho de la pantalla).
     observador = new ResizeObserver(() => mapa?.invalidateSize());
@@ -491,14 +478,12 @@ onMounted(async () => {
 
     listo.value = true;
     sincronizar();
-    if (props.modoZonas) activarDibujo();
 });
 
 onBeforeUnmount(() => {
     observador?.disconnect();
     mapa?.remove();
     mapa = null;
-    rutas.clear();
 });
 
 watch(
@@ -506,17 +491,16 @@ watch(
         () => props.despachos,
         () => props.envios,
         () => props.sucursales,
-        () => props.zonas,
         () => props.seleccionado,
-        () => props.modoZonas,
-        () => props.mostrarRutas,
+        () => props.paradaSeleccionadaId,
+        () => props.mostrarConexiones,
     ],
     () => listo.value && sincronizar(),
 );
 
 // Al elegir un despacho, el mapa se acerca a su ruta; al quitar la selección, vuelve a mostrar todo.
 watch(
-    () => props.seleccionado,
+    [() => props.seleccionado, () => props.paradaSeleccionadaId],
     async () => {
         if (!listo.value) return;
         await nextTick();
@@ -524,16 +508,7 @@ watch(
     },
 );
 
-watch(
-    () => props.modoZonas,
-    (activo) => {
-        if (!listo.value) return;
-        if (activo) activarDibujo();
-        else desactivarDibujo();
-    },
-);
-
-defineExpose({ ajustarVista, limpiarBorrador });
+defineExpose({ ajustarVista });
 
 /* ───────── Leyenda (solo cuenta lo que realmente está en el mapa) ───────── */
 const conteo = computed(() => {
@@ -548,9 +523,22 @@ const conteo = computed(() => {
         fallido: 0,
         desconocido: 0,
     };
+    const idsContados = new Set<number>();
 
     for (const envio of props.envios) {
-        if (posicionEnvio(envio)) total[estadoVisual(envio.estado).clave]++;
+        if (!posicionEnvio(envio)) continue;
+        total[estadoVisual(envio.estado).clave]++;
+        idsContados.add(envio.id);
+    }
+
+    const rutaSeleccionada = props.despachos.find(
+        (despacho) => despacho.id === props.seleccionado,
+    );
+    for (const parada of rutaSeleccionada?.paradas ?? []) {
+        if (idsContados.has(parada.envio_id) || !posicionParada(parada)) {
+            continue;
+        }
+        total[estadoVisual(parada.estado_envio).clave]++;
     }
 
     return total;
@@ -616,7 +604,7 @@ const sinEnvios = computed(() => listo.value && !props.envios.length);
                 class="max-h-64 overflow-y-auto border-t border-sidebar-border/70 px-3 py-2.5"
             >
                 <p class="mb-1.5 font-semibold text-foreground">
-                    Envíos ubicados
+                    Ubicaciones de envíos y paradas
                 </p>
                 <ul class="space-y-1">
                     <li
@@ -637,6 +625,15 @@ const sinEnvios = computed(() => listo.value && !props.envios.length);
                     </li>
                 </ul>
 
+                <p
+                    class="mt-2.5 flex items-center gap-2 border-t border-sidebar-border/70 pt-2 text-foreground"
+                >
+                    <span
+                        class="h-3 w-3 shrink-0 rounded-full border-2 border-dashed border-amber-600"
+                    />
+                    Centro del territorio (aproximado)
+                </p>
+
                 <p class="mt-2.5 mb-1.5 font-semibold text-foreground">Rutas</p>
                 <ul class="space-y-1">
                     <li
@@ -656,6 +653,53 @@ const sinEnvios = computed(() => listo.value && !props.envios.length);
                         <span>{{ r.etiqueta }}</span>
                     </li>
                 </ul>
+
+                <template v-if="mostrarConexiones">
+                    <p
+                        class="mt-2.5 mb-1.5 border-t border-sidebar-border/70 pt-2 font-semibold text-foreground"
+                    >
+                        Seguimiento de conexiones
+                    </p>
+                    <ul class="space-y-1">
+                        <li
+                            v-for="tramo in [
+                                {
+                                    etiqueta: 'Tramo anterior en la revisión',
+                                    color: colors.verde,
+                                    discontinuo: false,
+                                },
+                                {
+                                    etiqueta: 'Tramo de la parada seleccionada',
+                                    color: colors.azulClaro,
+                                    discontinuo: false,
+                                },
+                                {
+                                    etiqueta: 'Tramo pendiente en la revisión',
+                                    color: colors.grisMedio,
+                                    discontinuo: true,
+                                },
+                            ]"
+                            :key="tramo.etiqueta"
+                            class="flex items-center gap-2 text-foreground"
+                        >
+                            <span
+                                class="w-5 shrink-0 border-t-4"
+                                :style="{
+                                    borderColor: tramo.color,
+                                    borderTopStyle: tramo.discontinuo
+                                        ? 'dashed'
+                                        : 'solid',
+                                }"
+                            />
+                            <span>{{ tramo.etiqueta }}</span>
+                        </li>
+                    </ul>
+                    <p class="mt-2 text-muted-foreground">
+                        Las paradas aproximadas usan el punto representativo de
+                        su territorio; las líneas no representan trazado vial ni
+                        GPS.
+                    </p>
+                </template>
 
                 <p
                     class="mt-2.5 flex items-center gap-2 border-t border-sidebar-border/70 pt-2 text-foreground"
