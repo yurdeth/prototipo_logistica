@@ -552,9 +552,7 @@ const sinEnvios = computed(() => listo.value && !props.envios.length);
 </script>
 
 <template>
-    <div
-        class="relative isolate h-full min-h-[440px] overflow-hidden rounded-lg border border-sidebar-border/70"
-    >
+    <div class="relative isolate h-full overflow-hidden">
         <div
             ref="contenedor"
             class="absolute inset-0"
@@ -565,13 +563,15 @@ const sinEnvios = computed(() => listo.value && !props.envios.length);
         <!-- Aviso cuando no hay envíos en el conjunto filtrado. -->
         <p
             v-if="sinEnvios"
-            class="absolute top-3 left-1/2 z-[1000] -translate-x-1/2 rounded-lg border border-sidebar-border/70 bg-card/95 px-3 py-2 text-sm text-muted-foreground shadow-sm"
+            class="absolute top-14 left-1/2 z-[1000] w-max max-w-[calc(100%-1.5rem)] -translate-x-1/2 rounded-lg border border-sidebar-border/70 bg-card/95 px-3 py-2 text-center text-sm text-muted-foreground shadow-sm"
         >
             No hay envíos con los filtros seleccionados.
         </p>
 
+        <!-- Leyenda: arriba a la derecha para no chocar con la tarjeta de parada -->
         <div
-            class="absolute bottom-3 left-3 z-[1000] max-w-[min(260px,calc(100%-1.5rem))] rounded-lg border border-sidebar-border/70 bg-card/95 text-xs shadow-md"
+            class="absolute top-3 right-3 z-[1000] max-w-[calc(100%-4.5rem)] rounded-lg border border-sidebar-border/70 bg-card/95 text-xs shadow-md backdrop-blur"
+            :class="leyendaAbierta ? 'w-64' : ''"
         >
             <button
                 type="button"
@@ -580,7 +580,7 @@ const sinEnvios = computed(() => listo.value && !props.envios.length);
                 :aria-expanded="leyendaAbierta"
                 @click="leyendaAbierta = !leyendaAbierta"
             >
-                <span>Leyenda del mapa</span>
+                <span>Leyenda</span>
                 <svg
                     class="h-4 w-4 shrink-0 transition-transform"
                     :class="leyendaAbierta ? 'rotate-180' : ''"
@@ -601,65 +601,75 @@ const sinEnvios = computed(() => listo.value && !props.envios.length);
             <div
                 v-if="leyendaAbierta"
                 id="leyenda-mapa"
-                class="max-h-64 overflow-y-auto border-t border-sidebar-border/70 px-3 py-2.5"
+                class="max-h-[min(22rem,50vh)] space-y-3 overflow-y-auto border-t border-sidebar-border/70 px-3 py-3"
             >
-                <p class="mb-1.5 font-semibold text-foreground">
-                    Ubicaciones de envíos y paradas
-                </p>
-                <ul class="space-y-1">
-                    <li
-                        v-for="clave in ORDEN_VISUALES"
-                        :key="clave"
-                        class="flex items-center gap-2 text-foreground"
-                    >
+                <section>
+                    <h3 class="mb-1.5 font-semibold text-foreground">
+                        Envíos y paradas
+                    </h3>
+                    <ul class="space-y-1">
+                        <li
+                            v-for="clave in ORDEN_VISUALES"
+                            :key="clave"
+                            class="flex items-center gap-2 text-foreground"
+                        >
+                            <span
+                                class="h-3 w-3 shrink-0 rounded-full ring-2 ring-white"
+                                :style="{
+                                    backgroundColor: VISUALES[clave].color,
+                                }"
+                            />
+                            <span class="flex-1">{{
+                                VISUALES[clave].etiqueta
+                            }}</span>
+                            <span class="text-muted-foreground tabular-nums">{{
+                                conteo[clave]
+                            }}</span>
+                        </li>
+                    </ul>
+                    <p class="mt-2 flex items-center gap-2 text-foreground">
                         <span
-                            class="h-3 w-3 shrink-0 rounded-full ring-2 ring-white"
-                            :style="{ backgroundColor: VISUALES[clave].color }"
+                            class="h-3 w-3 shrink-0 rounded-full border-2 border-dashed border-amber-600"
                         />
-                        <span class="flex-1">{{
-                            VISUALES[clave].etiqueta
-                        }}</span>
-                        <span class="text-muted-foreground tabular-nums">{{
-                            conteo[clave]
-                        }}</span>
-                    </li>
-                </ul>
-
-                <p
-                    class="mt-2.5 flex items-center gap-2 border-t border-sidebar-border/70 pt-2 text-foreground"
-                >
-                    <span
-                        class="h-3 w-3 shrink-0 rounded-full border-2 border-dashed border-amber-600"
-                    />
-                    Centro del territorio (aproximado)
-                </p>
-
-                <p class="mt-2.5 mb-1.5 font-semibold text-foreground">Rutas</p>
-                <ul class="space-y-1">
-                    <li
-                        v-for="r in leyendaRutas"
-                        :key="r.estado"
-                        class="flex items-center gap-2 text-foreground"
-                    >
-                        <span
-                            class="w-5 shrink-0 border-t-4"
-                            :style="{
-                                borderColor: r.color,
-                                borderTopStyle: r.discontinua
-                                    ? 'dashed'
-                                    : 'solid',
-                            }"
-                        />
-                        <span>{{ r.etiqueta }}</span>
-                    </li>
-                </ul>
-
-                <template v-if="mostrarConexiones">
-                    <p
-                        class="mt-2.5 mb-1.5 border-t border-sidebar-border/70 pt-2 font-semibold text-foreground"
-                    >
-                        Seguimiento de conexiones
+                        Centro del territorio (aproximado)
                     </p>
+                    <p class="mt-1 flex items-center gap-2 text-foreground">
+                        <span
+                            class="flex h-3 w-3 shrink-0 items-center justify-center rounded-[3px] border border-white bg-slate-800"
+                        />
+                        Sucursal
+                    </p>
+                </section>
+
+                <section class="border-t border-sidebar-border/70 pt-3">
+                    <h3 class="mb-1.5 font-semibold text-foreground">Rutas</h3>
+                    <ul class="space-y-1">
+                        <li
+                            v-for="r in leyendaRutas"
+                            :key="r.estado"
+                            class="flex items-center gap-2 text-foreground"
+                        >
+                            <span
+                                class="w-5 shrink-0 border-t-4"
+                                :style="{
+                                    borderColor: r.color,
+                                    borderTopStyle: r.discontinua
+                                        ? 'dashed'
+                                        : 'solid',
+                                }"
+                            />
+                            <span>{{ r.etiqueta }}</span>
+                        </li>
+                    </ul>
+                </section>
+
+                <section
+                    v-if="mostrarConexiones"
+                    class="border-t border-sidebar-border/70 pt-3"
+                >
+                    <h3 class="mb-1.5 font-semibold text-foreground">
+                        Seguimiento de conexiones
+                    </h3>
                     <ul class="space-y-1">
                         <li
                             v-for="tramo in [
@@ -699,16 +709,7 @@ const sinEnvios = computed(() => listo.value && !props.envios.length);
                         su territorio; las líneas no representan trazado vial ni
                         GPS.
                     </p>
-                </template>
-
-                <p
-                    class="mt-2.5 flex items-center gap-2 border-t border-sidebar-border/70 pt-2 text-foreground"
-                >
-                    <span
-                        class="flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border border-white bg-slate-800"
-                    />
-                    Sucursal
-                </p>
+                </section>
             </div>
         </div>
     </div>
