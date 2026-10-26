@@ -300,6 +300,13 @@ class EnvioController extends Controller
                 throw ValidationException::withMessages(['estado' => 'El envío ya se encuentra en ese estado.']);
             }
 
+            // La matriz del ciclo de vida (EstadoEnvioEnum::TRANSICIONES) gobierna el cambio
+            $actual = EstadoEnvioEnum::from($modelo->estado->nombre_estado);
+
+            if (! $actual->puedeTransicionarA(EstadoEnvioEnum::from($data['estado']))) {
+                throw ValidationException::withMessages(['estado' => "Transición no permitida: un envío {$actual->value} no puede pasar a {$data['estado']}."]);
+            }
+
             $modelo->estado_envio_id = $nuevo;
             $modelo->notaEvento = $data['nota'] ?? null;
             $modelo->latitudEvento = $data['latitud'] ?? null;

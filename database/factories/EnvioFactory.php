@@ -29,6 +29,7 @@ class EnvioFactory extends Factory
 
     /** Nota por estado, redactada como la dejaría el operador en el rastro. */
     private const NOTAS = [
+        'REGISTRADO' => 'Envío registrado en el sistema',
         'RECOLECTADO' => 'Paquete recolectado en sucursal de origen',
         'EN_TRANSITO' => 'En tránsito hacia el centro de distribución',
         'EN_CENTRO' => 'Clasificado en centro de distribución',
