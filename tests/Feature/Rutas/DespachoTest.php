@@ -7,6 +7,7 @@ use App\Models\Empleado;
 use App\Models\Envio;
 use App\Models\Role;
 use App\Models\Sucursal;
+use App\Models\TipoVehiculo;
 use App\Models\User;
 use App\Models\Vehiculo;
 use Database\Seeders\EstadoVehiculoSeeder;
@@ -48,7 +49,13 @@ class DespachoTest extends TestCase
 
         $this->sucursal = Sucursal::query()->inRandomOrder()->first();
         $this->conductor = Empleado::factory()->conductor()->create(['sucursal_id' => $this->sucursal->id_sucursal]);
-        $this->vehiculoId = Vehiculo::factory()->create(['sucursal_id' => $this->sucursal->id_sucursal])->id_vehiculo;
+        // Camión pesado (18 t): la capacidad nunca es el motivo de rechazo en los tests base
+        $this->vehiculoId = Vehiculo::factory()
+            ->create([
+                'tipo_vehiculo_id' => DB::table('flota.tipos_vehiculos')->where('nombre', 'Camion Pesado')->value('id_tipo_vehiculo'),
+                'sucursal_id' => $this->sucursal->id_sucursal,
+            ])
+            ->id_vehiculo;
     }
 
     private function usuarioConRol(string $rol): User
@@ -57,6 +64,12 @@ class DespachoTest extends TestCase
         $usuario->roles()->attach(Role::query()->where('name', $rol)->value('id'));
 
         return $usuario;
+    }
+
+    /** Envío de prueba registrado en la sucursal de origen del despacho. */
+    private function envioDeLaSucursal(): Envio
+    {
+        return Envio::factory()->hasta('EN_CENTRO')->create(['sucursal_origen_id' => $this->sucursal->id_sucursal]);
     }
 
     /** Carga útil mínima válida para programar un despacho hoy. */
@@ -70,8 +83,8 @@ class DespachoTest extends TestCase
             'km_planificados' => 120,
             'costo_estimado' => 150,
             'paradas' => [
-                ['envio_id' => Envio::factory()->hasta('EN_CENTRO')->create()->id_envio, 'orden' => 1, 'hora_estimada' => now()->setTime(9, 0)->toISOString()],
-                ['envio_id' => Envio::factory()->hasta('EN_CENTRO')->create()->id_envio, 'orden' => 2, 'hora_estimada' => now()->setTime(10, 0)->toISOString()],
+                ['envio_id' => $this->envioDeLaSucursal()->id_envio, 'orden' => 1, 'hora_estimada' => now()->setTime(9, 0)->toISOString()],
+                ['envio_id' => $this->envioDeLaSucursal()->id_envio, 'orden' => 2, 'hora_estimada' => now()->setTime(10, 0)->toISOString()],
             ],
             ...$sobrescribir,
         ];
@@ -120,8 +133,8 @@ class DespachoTest extends TestCase
     public function test_el_seguimiento_conserva_todas_las_paradas_aunque_se_filtre_por_estado(): void
     {
         $envios = [
-            Envio::factory()->hasta('EN_CENTRO')->create(),
-            Envio::factory()->hasta('EN_CENTRO')->create(),
+            $this->envioDeLaSucursal(),
+            $this->envioDeLaSucursal(),
         ];
         $paradas = array_map(
             fn (Envio $envio, int $indice): array => [
@@ -163,8 +176,8 @@ class DespachoTest extends TestCase
             ->pluck('id_territorio', 'nombre_territorio');
 
         $envios = [
-            Envio::factory()->hasta('EN_CENTRO')->create(),
-            Envio::factory()->hasta('EN_CENTRO')->create(),
+            $this->envioDeLaSucursal(),
+            $this->envioDeLaSucursal(),
         ];
         $territoriosDestino = [
             $territorios['San Salvador'],
@@ -227,7 +240,7 @@ class DespachoTest extends TestCase
     public function test_rechaza_un_envio_ya_despachado(): void
     {
         // El primer envío del payload se despacha dos veces
-        $envio = Envio::factory()->hasta('EN_CENTRO')->create();
+        $envio = $this->envioDeLaSucursal();
         $parada = fn (int $orden) => ['envio_id' => $envio->id_envio, 'orden' => $orden, 'hora_estimada' => null];
 
         $this->actingAs($this->operador)
@@ -273,5 +286,49 @@ class DespachoTest extends TestCase
             ->assertForbidden();
 
         expect(Despacho::count())->toBe(0);
+    }
+
+    public function test_rechaza_peso_que_supera_la_capacidad_del_vehiculo(): void
+    {
+        $tipoChico = TipoVehiculo::query()->create([
+            'nombre' => 'Cuadro Moto',
+            'marca' => 'X',
+            'capacidad_kg' => 100.0,
+            'capacidad_m3' => null,
+        ]);
+        $vehiculoChico = Vehiculo::factory()->create([
+            'tipo_vehiculo_id' => $tipoChico->id_tipo_vehiculo,
+            'sucursal_id' => $this->sucursal->id_sucursal,
+        ]);
+        $envioPesado = Envio::factory()->hasta('EN_CENTRO')->create([
+            'sucursal_origen_id' => $this->sucursal->id_sucursal,
+            'peso_kg' => 150,
+        ]);
+
+        $this->actingAs($this->operador)
+            ->post('/rutas', $this->payload([
+                'vehiculo_id' => $vehiculoChico->id_vehiculo,
+                'paradas' => [['envio_id' => $envioPesado->id_envio, 'orden' => 1, 'hora_estimada' => null]],
+            ]))
+            ->assertSessionHasErrors('paradas');
+
+        expect(session('errors')->get('paradas')[0])
+            ->toBe('El peso total de los envíos (150.00 kg) supera la capacidad del vehículo (100.00 kg).');
+    }
+
+    public function test_rechaza_envios_de_otra_sucursal_de_origen(): void
+    {
+        $otraSucursal = Sucursal::query()->where('id_sucursal', '!=', $this->sucursal->id_sucursal)->firstOrFail();
+        $envioAjeno = Envio::factory()->hasta('EN_CENTRO')->create(['sucursal_origen_id' => $otraSucursal->id_sucursal]);
+
+        $this->actingAs($this->operador)
+            ->post('/rutas', $this->payload([
+                'paradas' => [['envio_id' => $envioAjeno->id_envio, 'orden' => 1, 'hora_estimada' => null]],
+            ]))
+            ->assertSessionHasErrors('paradas');
+
+        expect(session('errors')->get('paradas')[0])
+            ->toContain($envioAjeno->codigo_guia)
+            ->and(Despacho::count())->toBe(0);
     }
 }

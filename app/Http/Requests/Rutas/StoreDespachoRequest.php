@@ -89,6 +89,36 @@ class StoreDespachoRequest extends FormRequest
                 $v->errors()->add('paradas', "Estos envíos ya pertenecen a otro despacho: {$guias}.");
             }
 
+            $enviosDeParadas = DB::table('envios.envios')
+                ->whereIn('id_envio', collect((array) $this->input('paradas'))->pluck('envio_id'))
+                ->get(['id_envio', 'codigo_guia', 'peso_kg', 'sucursal_origen_id']);
+
+            // La carga del despacho no puede superar lo que el tipo de vehículo admite.
+            $capacidadKg = (float) DB::table('flota.vehiculos as v')
+                ->join('flota.tipos_vehiculos as t', 't.id_tipo_vehiculo', '=', 'v.tipo_vehiculo_id')
+                ->where('v.id_vehiculo', $this->input('vehiculo_id'))
+                ->value('t.capacidad_kg');
+
+            $pesoTotal = (float) $enviosDeParadas->sum('peso_kg');
+
+            if ($pesoTotal > $capacidadKg) {
+                $v->errors()->add('paradas', sprintf(
+                    'El peso total de los envíos (%s kg) supera la capacidad del vehículo (%s kg).',
+                    number_format($pesoTotal, 2, '.', ''),
+                    number_format($capacidadKg, 2, '.', ''),
+                ));
+            }
+
+            // Un despacho solo levanta envíos registrados en su sucursal de origen.
+            $guiasOtraSucursal = $enviosDeParadas
+                ->where('sucursal_origen_id', '!=', (int) $this->input('sucursal_origen_id'))
+                ->pluck('codigo_guia')
+                ->implode(', ');
+
+            if ($guiasOtraSucursal !== '') {
+                $v->errors()->add('paradas', "Estos envíos pertenecen a otra sucursal de origen: {$guiasOtraSucursal}.");
+            }
+
             $fechados = Despacho::query()
                 ->where('fecha', $this->input('fecha'))
                 ->whereIn('estado_despacho_id', function ($q): void {
