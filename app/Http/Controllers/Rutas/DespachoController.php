@@ -242,7 +242,7 @@ class DespachoController extends Controller
     }
 
     /** @return array<string, mixed> */
-    private static function mapearEnvio(object $e): array
+    private static function mapearEnvio(\stdClass $e): array
     {
         return [
             'id_envio' => $e->id_envio,

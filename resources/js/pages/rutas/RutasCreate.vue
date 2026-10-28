@@ -576,8 +576,8 @@ const btnIcono =
                                     {{
                                         buscando
                                             ? 'Buscando...'
-                                            : errorBusqueda ??
-                                              `${disponibles.length} resultados`
+                                            : (errorBusqueda ??
+                                              `${disponibles.length} resultados`)
                                     }}
                                 </span>
                             </div>
