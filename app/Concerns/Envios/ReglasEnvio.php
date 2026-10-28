@@ -32,9 +32,9 @@ trait ReglasEnvio
             'sucursal_origen_id' => ['required', 'integer', $this->existe('territorio.sucursales', 'id_sucursal', $sucursal)],
             'territorio_destino_id' => ['required', 'integer', $this->existe('territorio.territorios', 'id_territorio')],
             'direccion_destino' => ['required', 'string', 'min:10', 'max:255'],
-            // decimal(10,2): el máximo evita que un valor enorme llegue a PostgreSQL como error 500
-            'peso_kg' => ['required', 'numeric', 'gt:0', 'max:99999999.99'],
-            'volumen_m3' => ['nullable', 'numeric', 'gt:0', 'max:99999999.99'],
+            // Tope operativo: la carga no supera la capacidad del camión pesado más grande (18 000 kg, Tabla 3.2)
+            'peso_kg' => ['required', 'numeric', 'gt:0', 'max:18000'],
+            'volumen_m3' => ['nullable', 'numeric', 'gt:0', 'max:100'],
             'prioridad' => ['required', 'in:BAJA,NORMAL,URGENTE'],
         ];
     }
@@ -55,6 +55,8 @@ trait ReglasEnvio
             'in' => 'El valor de :attribute no es válido.',
             'date' => 'El campo :attribute debe ser una fecha válida.',
             'direccion_destino.min' => 'Escribe la dirección completa (colonia, calle, número o referencia).',
+            'peso_kg.max' => 'El peso excede la capacidad del camión más grande de la flota (máximo 18 000 kg).',
+            'volumen_m3.max' => 'El volumen no puede superar 100 m³.',
         ];
     }
 

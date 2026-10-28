@@ -27,13 +27,62 @@ const inputAttrs = computed(() => {
     return rest;
 });
 
+// Los negativos solo son válidos si el `min` lo permite (ej. coordenadas);
+// con min >= 0 (peso, km, costo…) el signo no debe poder teclearse.
+const permiteNegativos = computed(() => {
+    const min = Number(attrs.min ?? NaN);
+
+    return Number.isNaN(min) || min < 0;
+});
+
+// Tope duro del campo: los atributos max/min de HTML no bloquean el tipeo.
+const maximo = computed(() => {
+    const max = Number(attrs.max ?? NaN);
+
+    return Number.isNaN(max) ? null : max;
+});
+
+// Bloquea tipear signo y notación exponencial ("1e5"); el pegado se cubre en onInput.
+const onKeydown = (e: KeyboardEvent) => {
+    if (
+        props.type === 'number' &&
+        !permiteNegativos.value &&
+        (e.key === '-' || e.key === '+' || e.key === 'e' || e.key === 'E')
+    ) {
+        e.preventDefault();
+    }
+};
+
 const onInput = (e: Event) => {
     const el = e.target as HTMLInputElement;
 
     if (props.type === 'number') {
-        model.value = (
-            Number.isNaN(el.valueAsNumber) ? '' : el.valueAsNumber
-        ) as T;
+        let valor = el.valueAsNumber;
+        // "1e5" pasa el valueAsNumber (100000): se descarta si trae exponente.
+        const conExponente = /e/i.test(el.value);
+
+        if (maximo.value !== null && valor > maximo.value) {
+            valor = maximo.value;
+        }
+
+        if (
+            Number.isNaN(valor) ||
+            conExponente ||
+            (!permiteNegativos.value && valor < 0)
+        ) {
+            el.value = '';
+            model.value = '' as T;
+
+            return;
+        }
+
+        // Si el tope recortó lo tecleado, sincroniza el DOM a mano: el modelo
+        // puede quedar igual que antes y Vue no repintaría el input.
+        if (el.valueAsNumber !== valor) {
+            el.value = String(valor);
+        }
+
+        model.value = valor as T;
     } else {
         model.value = el.value as T;
     }
@@ -68,6 +117,7 @@ const onInput = (e: Event) => {
                 :aria-invalid="!!error"
                 :aria-describedby="error ? `${id}-error` : undefined"
                 :class="[inputClase, prefix && 'pl-7', suffix && 'pr-10']"
+                @keydown="onKeydown"
                 @input="onInput"
             />
 

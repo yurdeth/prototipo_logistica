@@ -136,13 +136,21 @@ watch(tipoDestinatario, (tipo) => {
 });
 
 /* ───────── Compromiso de entrega ───────── */
-const ahora = ref(Date.now());
+// El reloj arranca en el montaje (cliente): con SSR, un Date.now() tomado en
+// el render de servidor difiere del del cliente y rompe la hidratación.
+const ahora = ref<number | null>(null);
 let reloj: ReturnType<typeof setInterval> | undefined;
 
 const sugerida = computed(() =>
-    aInputLocal(new Date(ahora.value + horasCompromiso[form.prioridad] * H)),
+    ahora.value === null
+        ? ''
+        : aInputLocal(
+              new Date(ahora.value + horasCompromiso[form.prioridad] * H),
+          ),
 );
-const minimo = computed(() => aInputLocal(new Date(ahora.value)));
+const minimo = computed(() =>
+    ahora.value === null ? '' : aInputLocal(new Date(ahora.value)),
+);
 const manual = ref(false);
 
 const usarSugerida = () => {
@@ -151,6 +159,7 @@ const usarSugerida = () => {
 };
 
 onMounted(() => {
+    ahora.value = Date.now();
     usarSugerida();
     // Refresca los plazos para no mostrar información desactualizada.
     reloj = setInterval(() => (ahora.value = Date.now()), 60_000);
@@ -188,7 +197,7 @@ const compromisoMs = computed(() =>
 );
 
 const horas = computed(() =>
-    Number.isFinite(compromisoMs.value)
+    ahora.value !== null && Number.isFinite(compromisoMs.value)
         ? (compromisoMs.value - ahora.value) / H
         : null,
 );
@@ -441,6 +450,7 @@ const enviar = () => {
                             label="Peso"
                             type="number"
                             min="0.01"
+                            max="18000"
                             step="0.01"
                             placeholder="0.00"
                             suffix="kg"
@@ -453,6 +463,7 @@ const enviar = () => {
                             label="Volumen"
                             type="number"
                             min="0.01"
+                            max="100"
                             step="0.01"
                             placeholder="0.00"
                             suffix="m³"
