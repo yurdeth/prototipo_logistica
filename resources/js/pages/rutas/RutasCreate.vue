@@ -102,24 +102,42 @@ const idsSeleccionados = computed(
     () => new Set(paradas.value.map((p) => p.id_envio)),
 );
 
-/* Búsqueda server-side: el servidor consulta envios.envios; el front solo
-   excluye las paradas ya seleccionadas. */
-const resultados = ref<EnvioDisponible[]>([]);
-const buscando = ref(false);
+/* Listado de disponibles paginado en el servidor con scroll infinito: la
+   primera página llega renderizada por Laravel (props.envios) y el resto se
+   pide al endpoint de búsqueda al acercarse al final del scroll. El front
+   solo excluye las paradas ya seleccionadas. */
+const TAM_PAGINA = 20;
+
+const items = ref<EnvioDisponible[]>([]);
+const cargando = ref(false);
 const errorBusqueda = ref<string | null>(null);
+const hayMas = ref(false);
+const paginaSiguiente = ref(1);
 let controlador: AbortController | null = null;
 let temporizador: ReturnType<typeof setTimeout> | undefined;
 
-const buscarEnServidor = async (termino: string) => {
+if (props.envios.length > 0) {
+    items.value = [...props.envios];
+    paginaSiguiente.value = 2;
+    hayMas.value = props.envios.length >= TAM_PAGINA;
+}
+
+const cargar = async (reiniciar: boolean) => {
+    if (cargando.value) return;
+    if (!reiniciar && !hayMas.value) return;
+
     controlador?.abort();
     controlador = new AbortController();
-
-    buscando.value = true;
+    cargando.value = true;
     errorBusqueda.value = null;
+
+    const pagina = reiniciar ? 1 : paginaSiguiente.value;
 
     try {
         const respuesta = await fetch(
-            buscarEnviosRuta.url({ query: { q: termino } }),
+            buscarEnviosRuta.url({
+                query: { q: busqueda.value.trim(), page: pagina },
+            }),
             {
                 signal: controlador.signal,
                 headers: { Accept: 'application/json' },
@@ -130,32 +148,45 @@ const buscarEnServidor = async (termino: string) => {
             throw new Error(`La búsqueda falló (${respuesta.status}).`);
         }
 
-        resultados.value = (await respuesta.json()) as EnvioDisponible[];
+        const cuerpo = (await respuesta.json()) as {
+            data: EnvioDisponible[];
+            hay_mas: boolean;
+        };
+
+        items.value = reiniciar
+            ? cuerpo.data
+            : [...items.value, ...cuerpo.data];
+        hayMas.value = cuerpo.hay_mas;
+        paginaSiguiente.value = pagina + 1;
     } catch (err) {
         if (controlador.signal.aborted) return;
-        resultados.value = [];
         errorBusqueda.value =
             err instanceof Error
                 ? err.message
                 : 'No se pudo completar la búsqueda.';
     } finally {
-        if (!controlador.signal.aborted) buscando.value = false;
+        if (!controlador.signal.aborted) cargando.value = false;
     }
 };
 
 watch(busqueda, (valor) => {
     clearTimeout(temporizador);
-    const termino = valor.trim();
 
-    if (!termino) {
+    temporizador = setTimeout(() => {
+        if (valor.trim()) {
+            void cargar(true);
+
+            return;
+        }
+
+        // Sin término: vuelve a la página precargada y reinicia la paginación
         controlador?.abort();
-        resultados.value = [];
-        buscando.value = false;
-
-        return;
-    }
-
-    temporizador = setTimeout(() => void buscarEnServidor(termino), 300);
+        cargando.value = false;
+        errorBusqueda.value = null;
+        items.value = [...props.envios];
+        paginaSiguiente.value = 2;
+        hayMas.value = props.envios.length >= TAM_PAGINA;
+    }, 300);
 });
 
 onBeforeUnmount(() => {
@@ -163,13 +194,22 @@ onBeforeUnmount(() => {
     controlador?.abort();
 });
 
-const disponibles = computed(() => {
-    const lista = busqueda.value.trim() ? resultados.value : props.envios;
+// Pide la página siguiente cuando el scroll se acerca al final de la lista
+const alScroll = (e: Event) => {
+    const el = e.target as HTMLElement;
 
-    return lista
+    if (!hayMas.value || cargando.value) return;
+
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 60) {
+        void cargar(false);
+    }
+};
+
+const disponibles = computed(() =>
+    items.value
         .filter((e) => !idsSeleccionados.value.has(e.id_envio))
-        .sort(porCompromiso);
-});
+        .sort(porCompromiso),
+);
 
 const agregar = (e: EnvioDisponible) => paradas.value.push(e);
 const quitar = (i: number) => paradas.value.splice(i, 1);
@@ -574,10 +614,10 @@ const btnIcono =
                                 </h3>
                                 <span class="text-xs text-slate-500">
                                     {{
-                                        buscando
+                                        cargando
                                             ? 'Buscando...'
                                             : (errorBusqueda ??
-                                              `${disponibles.length} resultados`)
+                                              `${disponibles.length} en la lista`)
                                     }}
                                 </span>
                             </div>
@@ -597,6 +637,7 @@ const btnIcono =
 
                             <ul
                                 class="flex max-h-[420px] flex-col gap-2 overflow-y-auto pr-1"
+                                @scroll="alScroll"
                             >
                                 <li
                                     v-for="e in disponibles"
@@ -651,7 +692,7 @@ const btnIcono =
                                     v-if="!disponibles.length"
                                     title="No hay envíos disponibles"
                                     :description="
-                                        buscando
+                                        cargando
                                             ? 'Consultando envíos...'
                                             : 'Prueba con otro término de búsqueda.'
                                     "
@@ -660,6 +701,23 @@ const btnIcono =
                                         ><Search class="h-6 w-6"
                                     /></template>
                                 </EmptyState>
+
+                                <li
+                                    v-if="cargando && disponibles.length"
+                                    class="py-2 text-center text-xs text-slate-500"
+                                >
+                                    Cargando más envíos...
+                                </li>
+                                <li
+                                    v-else-if="
+                                        !hayMas &&
+                                        !errorBusqueda &&
+                                        disponibles.length
+                                    "
+                                    class="py-2 text-center text-xs text-slate-400"
+                                >
+                                    No hay más envíos
+                                </li>
                             </ul>
                         </div>
 

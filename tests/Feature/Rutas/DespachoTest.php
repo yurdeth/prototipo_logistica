@@ -339,11 +339,11 @@ class DespachoTest extends TestCase
         $respuesta = $this->actingAs($this->operador)
             ->getJson('/rutas/envios/buscar?q='.urlencode(substr($envio->codigo_guia, 3)))
             ->assertOk()
-            ->assertJsonCount(1);
+            ->assertJsonCount(1, 'data');
 
-        expect($respuesta->json('0.id_envio'))->toBe($envio->id_envio)
-            ->and($respuesta->json('0.codigo_guia'))->toBe($envio->codigo_guia)
-            ->and(array_keys($respuesta->json('0')))->toBe([
+        expect($respuesta->json('data.0.id_envio'))->toBe($envio->id_envio)
+            ->and($respuesta->json('data.0.codigo_guia'))->toBe($envio->codigo_guia)
+            ->and(array_keys($respuesta->json('data.0')))->toBe([
                 'id_envio', 'codigo_guia', 'destino', 'peso_kg', 'prioridad', 'fecha_comprometida',
             ]);
     }
@@ -357,9 +357,9 @@ class DespachoTest extends TestCase
         $this->actingAs($this->operador)
             ->getJson('/rutas/envios/buscar?q=san%20miguel')
             ->assertOk()
-            ->assertJsonCount(1)
-            ->assertJsonPath('0.id_envio', $envio->id_envio)
-            ->assertJsonPath('0.destino', 'San Miguel');
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id_envio', $envio->id_envio)
+            ->assertJsonPath('data.0.destino', 'San Miguel');
     }
 
     public function test_la_busqueda_excluye_envios_entregados_y_despachados(): void
@@ -391,5 +391,46 @@ class DespachoTest extends TestCase
         $this->actingAs($analista)
             ->getJson('/rutas/envios/buscar?q=PK')
             ->assertForbidden();
+    }
+
+    public function test_el_listado_de_disponibles_se_pagina_en_el_servidor(): void
+    {
+        Envio::factory()->hasta('EN_CENTRO')->count(21)->create(['sucursal_origen_id' => $this->sucursal->id_sucursal]);
+
+        $this->actingAs($this->operador)
+            ->getJson('/rutas/envios/buscar?page=1')
+            ->assertOk()
+            ->assertJsonCount(20, 'data')
+            ->assertJsonPath('hay_mas', true);
+
+        $this->actingAs($this->operador)
+            ->getJson('/rutas/envios/buscar?page=2')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('hay_mas', false);
+    }
+
+    /** Un envío con parada registrada en cualquier despacho deja de ofrecerse. */
+    public function test_el_listado_de_disponibles_excluye_envios_ya_despachados(): void
+    {
+        $asignado = $this->envioDeLaSucursal();
+        $libre = $this->envioDeLaSucursal();
+
+        $this->actingAs($this->operador)
+            ->post('/rutas', $this->payload([
+                'paradas' => [['envio_id' => $asignado->id_envio, 'orden' => 1, 'hora_estimada' => null]],
+            ]))
+            ->assertRedirect(route('rutas.index'));
+
+        $this->actingAs($this->operador)
+            ->getJson('/rutas/envios/buscar?q='.rawurlencode($libre->codigo_guia))
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id_envio', $libre->id_envio);
+
+        $this->actingAs($this->operador)
+            ->getJson('/rutas/envios/buscar?q='.rawurlencode($asignado->codigo_guia))
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
     }
 }

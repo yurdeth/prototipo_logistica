@@ -31,11 +31,8 @@ class DespachoController extends Controller
     /** Cuántos despachos recientes alimentan los paneles (índice y dashboard). */
     private const LIMITE_PANEL = 60;
 
-    /** Envíos que precarga el formulario; la búsqueda completa vive en el servidor. */
-    private const LIMITE_ENVIOS = 200;
-
-    /** Resultados máximos que devuelve la búsqueda server-side de envíos. */
-    private const LIMITE_BUSQUEDA = 20;
+    /** Tamaño de página del listado paginado de envíos disponibles (scroll infinito). */
+    private const TAM_PAGINA_ENVIOS = 20;
 
     /** Columnas mínimas del envío disponible que consume el formulario. */
     private const COLUMNAS_ENVIO = [
@@ -187,34 +184,43 @@ class DespachoController extends Controller
     }
 
     /**
-     * Envíos que aún pueden despacharse: abiertos y sin despacho asignado.
+     * Primera página de envíos que aún pueden despacharse: abiertos y sin
+     * despacho asignado; el resto llega paginado por el endpoint de búsqueda.
      *
      * @return array<int, array<string, mixed>>
      */
     private static function enviosDisponibles(): array
     {
         return self::consultaEnviosDisponibles()
-            ->limit(self::LIMITE_ENVIOS)
+            ->limit(self::TAM_PAGINA_ENVIOS)
             ->get(self::COLUMNAS_ENVIO)
             ->map(self::mapearEnvio(...))
             ->all();
     }
 
     /**
-     * Búsqueda server-side de envíos disponibles (guía o destino); alimenta el
-     * buscador del formulario sin cargar toda la tabla.
+     * Página del listado de envíos disponibles (guía o destino como filtro);
+     * alimenta el scroll infinito del formulario sin cargar toda la tabla.
      */
     public function buscarEnvios(Request $request): JsonResponse
     {
-        $validos = $request->validate(['q' => ['nullable', 'string', 'max:100']]);
+        $validos = $request->validate([
+            'q' => ['nullable', 'string', 'max:100'],
+            'page' => ['nullable', 'integer', 'min:1'],
+        ]);
 
-        $envios = self::consultaEnviosDisponibles($validos['q'] ?? null)
-            ->limit(self::LIMITE_BUSQUEDA)
-            ->get(self::COLUMNAS_ENVIO)
-            ->map(self::mapearEnvio(...))
-            ->all();
+        $pagina = max(1, (int) ($validos['page'] ?? 1));
 
-        return response()->json($envios);
+        // Pide una fila más para saber si hay página siguiente sin COUNT(*)
+        $filas = self::consultaEnviosDisponibles($validos['q'] ?? null)
+            ->offset(($pagina - 1) * self::TAM_PAGINA_ENVIOS)
+            ->limit(self::TAM_PAGINA_ENVIOS + 1)
+            ->get(self::COLUMNAS_ENVIO);
+
+        return response()->json([
+            'data' => $filas->take(self::TAM_PAGINA_ENVIOS)->map(self::mapearEnvio(...))->values()->all(),
+            'hay_mas' => $filas->count() > self::TAM_PAGINA_ENVIOS,
+        ]);
     }
 
     /**
