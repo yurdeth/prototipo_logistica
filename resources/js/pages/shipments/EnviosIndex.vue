@@ -11,6 +11,8 @@ import {
     type Envio,
 } from '@/config/Envios/envios';
 import { getSla, fmtFecha, fmtDuracion } from '@/composables/useEnviosBI';
+import { useClipboard } from '@vueuse/core';
+import { Check, Copy } from '@lucide/vue';
 
 import EncabezadoAcciones from '@/components/bi/BiHeader.vue';
 import StatCards from '@/components/bi/StatCards.vue';
@@ -249,6 +251,7 @@ onMounted(() => (reloj = setInterval(() => (now.value = Date.now()), 60_000)));
 onBeforeUnmount(() => {
     clearInterval(reloj);
     clearTimeout(temporizador);
+    clearTimeout(copiadoTimer);
 });
 
 // getSla trabaja con la forma del envío; la fila del servidor trae los campos que usa.
@@ -358,6 +361,18 @@ const columnas: Columna[] = [
 ];
 
 const abrir = (e: FilaEnvio) => router.visit(`/envios/${e.id_envio}`);
+
+/* ───────── Copiar código de guía ───────── */
+const { copy } = useClipboard();
+const codigoCopiado = ref<string | null>(null);
+let copiadoTimer: ReturnType<typeof setTimeout> | undefined;
+
+const copiarGuia = async (codigo: string) => {
+    await copy(codigo);
+    codigoCopiado.value = codigo;
+    clearTimeout(copiadoTimer);
+    copiadoTimer = setTimeout(() => (codigoCopiado.value = null), 2000);
+};
 
 /* ───────── Análisis en pestañas ───────── */
 const tab = ref('tendencia');
@@ -526,9 +541,26 @@ const campoClase =
                         "
                     >
                         <p
-                            class="font-mono text-sm font-medium text-foreground"
+                            class="flex items-center gap-1 font-mono text-sm font-medium text-foreground"
                         >
                             {{ e.codigo_guia }}
+                            <button
+                                type="button"
+                                class="rounded p-0.5 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                                :aria-label="`Copiar ${e.codigo_guia}`"
+                                :title="
+                                    codigoCopiado === e.codigo_guia
+                                        ? 'Copiado'
+                                        : 'Copiar código'
+                                "
+                                @click.stop="copiarGuia(e.codigo_guia)"
+                            >
+                                <Check
+                                    v-if="codigoCopiado === e.codigo_guia"
+                                    class="h-3.5 w-3.5 text-green-500"
+                                />
+                                <Copy v-else class="h-3.5 w-3.5" />
+                            </button>
                         </p>
                         <p class="mt-1 text-xs text-muted-foreground">
                             {{ e.remitente }} a {{ e.destinatario }}

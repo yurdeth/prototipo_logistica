@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onBeforeUnmount, ref } from 'vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { dashboard } from '@/routes';
 import { estadoInfo, prioridadInfo, slaInfo } from '@/config/Envios/envios';
 import { getSla, fmtFecha } from '@/composables/useEnviosBI';
+import { useClipboard } from '@vueuse/core';
+import { Check, Copy } from '@lucide/vue';
 import BiFields from '@/components/bi/DetailFields.vue';
 import BiTimeline from '@/components/bi/BiTimeline.vue';
 import BiBadge from '@/components/bi/BiBadge.vue';
@@ -122,6 +124,20 @@ const historial = computed<TimelineItem[]>(() =>
     })),
 );
 
+/* ───────── Copiar código de guía ───────── */
+const { copy } = useClipboard();
+const codigoCopiado = ref(false);
+let copiadoTimer: ReturnType<typeof setTimeout> | undefined;
+
+const copiarGuia = async () => {
+    await copy(props.envio.codigo_guia);
+    codigoCopiado.value = true;
+    clearTimeout(copiadoTimer);
+    copiadoTimer = setTimeout(() => (codigoCopiado.value = false), 2000);
+};
+
+onBeforeUnmount(() => clearTimeout(copiadoTimer));
+
 /* ───────── Cambio de estado ───────── */
 const form = useForm({
     estado: props.envio.estado as string,
@@ -150,8 +166,23 @@ const cambiarEstado = () => {
         >
             <div>
                 <p class="text-sm text-muted-foreground">Detalle del envío</p>
-                <h1 class="font-mono text-2xl font-semibold text-foreground">
+                <h1
+                    class="flex items-center gap-2 font-mono text-2xl font-semibold text-foreground"
+                >
                     {{ envio.codigo_guia }}
+                    <button
+                        type="button"
+                        class="rounded p-1 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                        aria-label="Copiar código de guía"
+                        :title="codigoCopiado ? 'Copiado' : 'Copiar código'"
+                        @click="copiarGuia"
+                    >
+                        <Check
+                            v-if="codigoCopiado"
+                            class="h-4 w-4 text-green-500"
+                        />
+                        <Copy v-else class="h-4 w-4" />
+                    </button>
                 </h1>
             </div>
 
