@@ -46,6 +46,7 @@ Route::middleware(['auth'])->group(function () {
 
         Route::middleware('can:despachos.gestionar')->group(function () {
             Route::get('crear', [DespachoController::class, 'create'])->name('create');
+            Route::get('envios/buscar', [DespachoController::class, 'buscarEnvios'])->name('envios.buscar');
             Route::post('/', [DespachoController::class, 'store'])->name('store');
         });
     });

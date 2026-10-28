@@ -10,7 +10,10 @@ use App\Models\DespachoParada;
 use App\Models\Empleado;
 use App\Models\Sucursal;
 use App\Models\Vehiculo;
+use Illuminate\Database\Query\Builder;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -27,6 +30,22 @@ class DespachoController extends Controller
 {
     /** Cuántos despachos recientes alimentan los paneles (índice y dashboard). */
     private const LIMITE_PANEL = 60;
+
+    /** Envíos que precarga el formulario; la búsqueda completa vive en el servidor. */
+    private const LIMITE_ENVIOS = 200;
+
+    /** Resultados máximos que devuelve la búsqueda server-side de envíos. */
+    private const LIMITE_BUSQUEDA = 20;
+
+    /** Columnas mínimas del envío disponible que consume el formulario. */
+    private const COLUMNAS_ENVIO = [
+        'e.id_envio',
+        'e.codigo_guia',
+        't.nombre_territorio as destino',
+        'e.peso_kg',
+        'e.prioridad',
+        'e.fecha_comprometida',
+    ];
 
     public function index(): Response
     {
@@ -174,31 +193,65 @@ class DespachoController extends Controller
      */
     private static function enviosDisponibles(): array
     {
+        return self::consultaEnviosDisponibles()
+            ->limit(self::LIMITE_ENVIOS)
+            ->get(self::COLUMNAS_ENVIO)
+            ->map(self::mapearEnvio(...))
+            ->all();
+    }
+
+    /**
+     * Búsqueda server-side de envíos disponibles (guía o destino); alimenta el
+     * buscador del formulario sin cargar toda la tabla.
+     */
+    public function buscarEnvios(Request $request): JsonResponse
+    {
+        $validos = $request->validate(['q' => ['nullable', 'string', 'max:100']]);
+
+        $envios = self::consultaEnviosDisponibles($validos['q'] ?? null)
+            ->limit(self::LIMITE_BUSQUEDA)
+            ->get(self::COLUMNAS_ENVIO)
+            ->map(self::mapearEnvio(...))
+            ->all();
+
+        return response()->json($envios);
+    }
+
+    /**
+     * Consulta base de envíos disponibles; con término, filtra por guía o destino.
+     *
+     * @return Builder
+     */
+    private static function consultaEnviosDisponibles(?string $termino = null)
+    {
         return DB::table('envios.envios as e')
             ->join('envios.estados_envios as s', 's.id_estado', '=', 'e.estado_envio_id')
             ->leftJoin('rutas.despacho_paradas as p', 'p.envio_id', '=', 'e.id_envio')
             ->join('territorio.territorios as t', 't.id_territorio', '=', 'e.territorio_destino_id')
             ->whereNull('p.id_parada')
             ->whereRaw("s.nombre_estado NOT IN ('ENTREGADO','DEVUELTO','FALLIDO')")
-            ->orderBy('e.fecha_comprometida')
-            ->limit(200)
-            ->get([
-                'e.id_envio',
-                'e.codigo_guia',
-                't.nombre_territorio as destino',
-                'e.peso_kg',
-                'e.prioridad',
-                'e.fecha_comprometida',
-            ])
-            ->map(fn ($e) => [
-                'id_envio' => $e->id_envio,
-                'codigo_guia' => $e->codigo_guia,
-                'destino' => $e->destino,
-                'peso_kg' => (float) $e->peso_kg,
-                'prioridad' => $e->prioridad,
-                'fecha_comprometida' => Carbon::parse($e->fecha_comprometida)->toISOString(),
-            ])
-            ->all();
+            ->when($termino !== null && $termino !== '', function ($consulta) use ($termino) {
+                $patron = '%'.str_replace(['\\', '%', '_'], ['\\\\', '\%', '\_'], $termino).'%';
+
+                $consulta->where(function ($sub) use ($patron) {
+                    $sub->where('e.codigo_guia', 'ilike', $patron)
+                        ->orWhere('t.nombre_territorio', 'ilike', $patron);
+                });
+            })
+            ->orderBy('e.fecha_comprometida');
+    }
+
+    /** @return array<string, mixed> */
+    private static function mapearEnvio(object $e): array
+    {
+        return [
+            'id_envio' => $e->id_envio,
+            'codigo_guia' => $e->codigo_guia,
+            'destino' => $e->destino,
+            'peso_kg' => (float) $e->peso_kg,
+            'prioridad' => $e->prioridad,
+            'fecha_comprometida' => Carbon::parse($e->fecha_comprometida)->toISOString(),
+        ];
     }
 
     /**

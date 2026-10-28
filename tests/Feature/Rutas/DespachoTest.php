@@ -331,4 +331,65 @@ class DespachoTest extends TestCase
             ->toContain($envioAjeno->codigo_guia)
             ->and(Despacho::count())->toBe(0);
     }
+
+    public function test_la_busqueda_encuentra_envios_por_guia_sin_importar_mayusculas(): void
+    {
+        $envio = $this->envioDeLaSucursal();
+
+        $respuesta = $this->actingAs($this->operador)
+            ->getJson('/rutas/envios/buscar?q='.urlencode(substr($envio->codigo_guia, 3)))
+            ->assertOk()
+            ->assertJsonCount(1);
+
+        expect($respuesta->json('0.id_envio'))->toBe($envio->id_envio)
+            ->and($respuesta->json('0.codigo_guia'))->toBe($envio->codigo_guia)
+            ->and(array_keys($respuesta->json('0')))->toBe([
+                'id_envio', 'codigo_guia', 'destino', 'peso_kg', 'prioridad', 'fecha_comprometida',
+            ]);
+    }
+
+    public function test_la_busqueda_encuentra_envios_por_territorio_de_destino(): void
+    {
+        $envio = $this->envioDeLaSucursal();
+        $sanMiguel = DB::table('territorio.territorios')->where('nombre_territorio', 'San Miguel')->value('id_territorio');
+        DB::table('envios.envios')->where('id_envio', $envio->id_envio)->update(['territorio_destino_id' => $sanMiguel]);
+
+        $this->actingAs($this->operador)
+            ->getJson('/rutas/envios/buscar?q=san%20miguel')
+            ->assertOk()
+            ->assertJsonCount(1)
+            ->assertJsonPath('0.id_envio', $envio->id_envio)
+            ->assertJsonPath('0.destino', 'San Miguel');
+    }
+
+    public function test_la_busqueda_excluye_envios_entregados_y_despachados(): void
+    {
+        $envio = $this->envioDeLaSucursal();
+
+        $this->actingAs($this->operador)
+            ->post('/rutas', $this->payload(['paradas' => [
+                ['envio_id' => $envio->id_envio, 'orden' => 1, 'hora_estimada' => null],
+            ]]))
+            ->assertRedirect(route('rutas.index'));
+
+        $entregado = $this->envioDeLaSucursal();
+        DB::table('envios.envios')
+            ->where('id_envio', $entregado->id_envio)
+            ->update(['estado_envio_id' => DB::table('envios.estados_envios')->where('nombre_estado', 'ENTREGADO')->value('id_estado')]);
+
+        $this->actingAs($this->operador)
+            ->getJson('/rutas/envios/buscar')
+            ->assertOk()
+            ->assertJsonMissing(['id_envio' => $envio->id_envio])
+            ->assertJsonMissing(['id_envio' => $entregado->id_envio]);
+    }
+
+    public function test_sin_permiso_no_puede_buscar_envios(): void
+    {
+        $analista = $this->usuarioConRol('analista');
+
+        $this->actingAs($analista)
+            ->getJson('/rutas/envios/buscar?q=PK')
+            ->assertForbidden();
+    }
 }

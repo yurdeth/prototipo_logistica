@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { Head, useForm } from '@inertiajs/vue3';
 import { colors } from '@/UI/Colors';
 import {
@@ -12,6 +12,7 @@ import {
     X,
 } from '@/UI/Icons';
 import { dashboard } from '@/routes';
+import { buscar as buscarEnviosRuta } from '@/routes/rutas/envios';
 import { prioridadInfo } from '@/config/Envios/envios';
 // ⚠ El import original tenía un espacio al final: 'Despachoform '. Ajusta al nombre real del archivo.
 import {
@@ -101,16 +102,72 @@ const idsSeleccionados = computed(
     () => new Set(paradas.value.map((p) => p.id_envio)),
 );
 
-const disponibles = computed(() => {
-    const q = busqueda.value.trim().toLowerCase();
+/* Búsqueda server-side: el servidor consulta envios.envios; el front solo
+   excluye las paradas ya seleccionadas. */
+const resultados = ref<EnvioDisponible[]>([]);
+const buscando = ref(false);
+const errorBusqueda = ref<string | null>(null);
+let controlador: AbortController | null = null;
+let temporizador: ReturnType<typeof setTimeout> | undefined;
 
-    return props.envios
-        .filter(
-            (e) =>
-                !idsSeleccionados.value.has(e.id_envio) &&
-                (!q ||
-                    `${e.codigo_guia} ${e.destino}`.toLowerCase().includes(q)),
-        )
+const buscarEnServidor = async (termino: string) => {
+    controlador?.abort();
+    controlador = new AbortController();
+
+    buscando.value = true;
+    errorBusqueda.value = null;
+
+    try {
+        const respuesta = await fetch(
+            buscarEnviosRuta.url({ query: { q: termino } }),
+            {
+                signal: controlador.signal,
+                headers: { Accept: 'application/json' },
+            },
+        );
+
+        if (!respuesta.ok) {
+            throw new Error(`La búsqueda falló (${respuesta.status}).`);
+        }
+
+        resultados.value = (await respuesta.json()) as EnvioDisponible[];
+    } catch (err) {
+        if (controlador.signal.aborted) return;
+        resultados.value = [];
+        errorBusqueda.value =
+            err instanceof Error
+                ? err.message
+                : 'No se pudo completar la búsqueda.';
+    } finally {
+        if (!controlador.signal.aborted) buscando.value = false;
+    }
+};
+
+watch(busqueda, (valor) => {
+    clearTimeout(temporizador);
+    const termino = valor.trim();
+
+    if (!termino) {
+        controlador?.abort();
+        resultados.value = [];
+        buscando.value = false;
+
+        return;
+    }
+
+    temporizador = setTimeout(() => void buscarEnServidor(termino), 300);
+});
+
+onBeforeUnmount(() => {
+    clearTimeout(temporizador);
+    controlador?.abort();
+});
+
+const disponibles = computed(() => {
+    const lista = busqueda.value.trim() ? resultados.value : props.envios;
+
+    return lista
+        .filter((e) => !idsSeleccionados.value.has(e.id_envio))
         .sort(porCompromiso);
 });
 
@@ -515,9 +572,14 @@ const btnIcono =
                                 >
                                     Envíos disponibles
                                 </h3>
-                                <span class="text-xs text-slate-500"
-                                    >{{ disponibles.length }} resultados</span
-                                >
+                                <span class="text-xs text-slate-500">
+                                    {{
+                                        buscando
+                                            ? 'Buscando...'
+                                            : errorBusqueda ??
+                                              `${disponibles.length} resultados`
+                                    }}
+                                </span>
                             </div>
 
                             <div class="relative mb-4">
@@ -588,7 +650,11 @@ const btnIcono =
                                 <EmptyState
                                     v-if="!disponibles.length"
                                     title="No hay envíos disponibles"
-                                    description="Prueba con otro término de búsqueda."
+                                    :description="
+                                        buscando
+                                            ? 'Consultando envíos...'
+                                            : 'Prueba con otro término de búsqueda.'
+                                    "
                                 >
                                     <template #icon
                                         ><Search class="h-6 w-6"
