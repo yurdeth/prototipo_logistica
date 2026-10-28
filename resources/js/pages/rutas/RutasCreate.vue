@@ -291,6 +291,17 @@ const cargaColor = computed(() =>
             : colors.verde,
 );
 
+// Un envío solo se agrega si el vehículo elegido aún puede cargarlo
+const cabeEnVehiculo = (e: EnvioDisponible) =>
+    !!vehiculo.value?.capacidad_kg &&
+    pesoTotal.value + e.peso_kg <= vehiculo.value.capacidad_kg;
+
+const capacidadLibre = computed(() =>
+    vehiculo.value?.capacidad_kg
+        ? Math.max(0, vehiculo.value.capacidad_kg - pesoTotal.value)
+        : null,
+);
+
 /* ───────── Costo ───────── */
 const costoManual = ref(false);
 
@@ -622,6 +633,29 @@ const btnIcono =
                                 </span>
                             </div>
 
+                            <p
+                                v-if="!vehiculo"
+                                class="mb-3 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800"
+                            >
+                                Selecciona un vehículo para habilitar la carga
+                                de envíos.
+                            </p>
+                            <p
+                                v-else
+                                class="mb-3 rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600"
+                            >
+                                Capacidad libre del vehículo:
+                                <span
+                                    class="font-semibold"
+                                    :class="
+                                        capacidadLibre === 0
+                                            ? 'text-red-600'
+                                            : 'text-slate-800'
+                                    "
+                                    >{{ capacidadLibre?.toFixed(1) }} kg</span
+                                >
+                            </p>
+
                             <div class="relative mb-4">
                                 <Search
                                     class="absolute top-2.5 left-3 h-4 w-4 text-slate-400"
@@ -680,8 +714,22 @@ const btnIcono =
 
                                     <button
                                         type="button"
-                                        class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-600 transition hover:border-blue-600 hover:bg-blue-50 hover:text-blue-700"
-                                        :aria-label="`Agregar ${e.codigo_guia}`"
+                                        class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-600 transition hover:border-blue-600 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-300 disabled:hover:bg-white disabled:hover:text-slate-600"
+                                        :disabled="
+                                            !vehiculo || !cabeEnVehiculo(e)
+                                        "
+                                        :aria-label="
+                                            !vehiculo
+                                                ? `Selecciona un vehículo antes de agregar ${e.codigo_guia}`
+                                                : `Agregar ${e.codigo_guia}`
+                                        "
+                                        :title="
+                                            !vehiculo
+                                                ? 'Selecciona primero un vehículo'
+                                                : !cabeEnVehiculo(e)
+                                                  ? `Excede la capacidad libre del vehículo (${capacidadLibre?.toFixed(1)} kg disponibles)`
+                                                  : undefined
+                                        "
                                         @click="agregar(e)"
                                     >
                                         <Plus class="h-4 w-4" />
