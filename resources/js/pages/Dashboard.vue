@@ -78,7 +78,7 @@ const props = defineProps<{
     resumenOperativo: {
         distancia_km: number | null;
         tiempo_horas: number | null;
-        combustible_litros: number | null;
+        combustible_galones: number | null;
         co2_kg: number | null;
     };
 }>();
@@ -299,8 +299,8 @@ const resumenOperativo = computed(() => {
 
         {
             label: 'Combustible estimado',
-            value: formatoIndicador(props.resumenOperativo.combustible_litros),
-            unit: 'L',
+            value: formatoIndicador(props.resumenOperativo.combustible_galones),
+            unit: 'gal',
             icono: iconos.combustible,
         },
 
@@ -871,7 +871,8 @@ const resumenAnalisis = computed(() =>
                                     class="mt-3 text-xs leading-relaxed text-muted-foreground"
                                 >
                                     Se calculan con un factor de 2.31 kg de CO₂
-                                    por litro de combustible.
+                                    por litro de combustible (≈ 8.74 kg por
+                                    galón).
                                 </p>
                             </article>
 

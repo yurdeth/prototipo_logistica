@@ -204,7 +204,7 @@ class DashboardController extends Controller
     /**
      * Indicadores operativos basados en recorridos, paradas y consumo registrados.
      *
-     * @return array{distancia_km: float|null, tiempo_horas: float|null, combustible_litros: float|null, co2_kg: float|null}
+     * @return array{distancia_km: float|null, tiempo_horas: float|null, combustible_galones: float|null, co2_kg: float|null}
      */
     private function resumenOperativo(CarbonInterface $desde): array
     {
@@ -213,11 +213,10 @@ class DashboardController extends Controller
             ->where('d.fecha', '>=', $desde)
             ->selectRaw(
                 'sum(d.km_recorridos) as distancia_km,
-                sum((d.km_recorridos / nullif(v.consumo_km_gal, 0)) * ?) FILTER (
+                sum(d.km_recorridos / nullif(v.consumo_km_gal, 0)) FILTER (
                     WHERE d.km_recorridos IS NOT NULL
                     AND v.consumo_km_gal IS NOT NULL
-                ) as combustible_litros',
-                [self::LITROS_POR_GALON],
+                ) as combustible_galones'
             )
             ->first();
 
@@ -237,16 +236,17 @@ class DashboardController extends Controller
         $distanciaKm = $distanciasYCombustible->distancia_km !== null
             ? (float) $distanciasYCombustible->distancia_km
             : null;
-        $combustibleLitros = $distanciasYCombustible->combustible_litros !== null
-            ? (float) $distanciasYCombustible->combustible_litros
+        $combustibleGalones = $distanciasYCombustible->combustible_galones !== null
+            ? (float) $distanciasYCombustible->combustible_galones
             : null;
 
         return [
             'distancia_km' => $distanciaKm !== null ? round($distanciaKm, 1) : null,
             'tiempo_horas' => $tiempoHoras !== null ? round((float) $tiempoHoras, 1) : null,
-            'combustible_litros' => $combustibleLitros !== null ? round($combustibleLitros, 1) : null,
-            'co2_kg' => $combustibleLitros !== null
-                ? round($combustibleLitros * self::KG_CO2_POR_LITRO, 1)
+            'combustible_galones' => $combustibleGalones !== null ? round($combustibleGalones, 1) : null,
+            // El factor de emisión está referido al litro: se convierte antes de aplicar
+            'co2_kg' => $combustibleGalones !== null
+                ? round($combustibleGalones * self::LITROS_POR_GALON * self::KG_CO2_POR_LITRO, 1)
                 : null,
         ];
     }
