@@ -34,11 +34,17 @@ class EmpleadoFactory extends Factory
 
     /**
      * Empleado conductor: puesto de Conductor y licencia; los despachos solo
-     * pueden asignarse a alguien con este perfil.
+     * pueden asignarse a alguien con este perfil. La licencia usa secuencia
+     * propia (como el documento) porque ahora es única en la base; el closure
+     * se evalúa por modelo, así que count(N) no repite el valor.
      */
     public function conductor(): static
     {
+        static $secuenciaLicencia = 0;
+
         return $this->for(PuestoFactory::conductor(), 'puesto')
-            ->set('numero_licencia', fake()->numerify('LIC-######'));
+            ->set('numero_licencia', function () use (&$secuenciaLicencia): string {
+                return 'LIC-'.str_pad((string) (++$secuenciaLicencia), 6, '0', STR_PAD_LEFT);
+            });
     }
 }

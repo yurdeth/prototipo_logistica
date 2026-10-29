@@ -88,6 +88,29 @@ class EmpleadoTest extends TestCase
         expect(Empleado::count())->toBe(1);
     }
 
+    public function test_rechaza_licencia_duplicada(): void
+    {
+        Empleado::create($this->datosBase);
+
+        $this->actingAs($this->usuario)
+            ->post('/empleados', [...$this->datosBase, 'documento_identidad' => '7654321'])
+            ->assertSessionHasErrors('numero_licencia');
+
+        expect(Empleado::count())->toBe(1);
+    }
+
+    /** Varios empleados sin licencia conviven: el unique solo aplica al valor presente. */
+    public function test_permite_varios_empleados_sin_licencia(): void
+    {
+        Empleado::create([...$this->datosBase, 'numero_licencia' => null]);
+
+        $this->actingAs($this->usuario)
+            ->post('/empleados', [...$this->datosBase, 'documento_identidad' => '7654321', 'numero_licencia' => null])
+            ->assertRedirect('/empleados');
+
+        expect(Empleado::count())->toBe(2);
+    }
+
     public function test_valida_campos_obligatorios_y_existencias(): void
     {
         $this->actingAs($this->usuario)
@@ -137,6 +160,19 @@ class EmpleadoTest extends TestCase
 
         expect($empleado->refresh()->telefono)->toBe('71112222')
             ->and(Empleado::count())->toBe(1);
+    }
+
+    public function test_rechaza_editar_con_licencia_de_otro_empleado(): void
+    {
+        Empleado::create($this->datosBase);
+
+        $otro = Empleado::create([...$this->datosBase, 'documento_identidad' => '7654321', 'numero_licencia' => 'LIC-002']);
+
+        $this->actingAs($this->usuario)
+            ->put("/empleados/{$otro->id_empleado}", [...$this->datosBase, 'documento_identidad' => '1111111'])
+            ->assertSessionHasErrors('numero_licencia');
+
+        expect($otro->refresh()->numero_licencia)->toBe('LIC-002');
     }
 
     public function test_pagina_de_edicion_muestra_el_empleado(): void

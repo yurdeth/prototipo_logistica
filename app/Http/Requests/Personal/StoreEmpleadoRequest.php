@@ -44,7 +44,13 @@ class StoreEmpleadoRequest extends FormRequest
                 Rule::unique(Empleado::class, 'documento_identidad'),
             ],
             'telefono' => ['nullable', 'string', 'max:20'],
-            'numero_licencia' => ['nullable', 'string', 'max:30'],
+            // La licencia identifica al conductor: presente, nunca repetida
+            'numero_licencia' => [
+                'nullable',
+                'string',
+                'max:30',
+                Rule::unique(Empleado::class, 'numero_licencia'),
+            ],
             // Un empleado no puede contratarse en el futuro
             'fecha_contratacion' => ['nullable', 'date', 'before_or_equal:today'],
             'activo' => ['boolean'],
@@ -74,6 +80,7 @@ class StoreEmpleadoRequest extends FormRequest
             'documento_identidad.max' => 'El documento de identidad no puede superar 20 caracteres.',
             'documento_identidad.unique' => 'Ya existe un empleado registrado con ese documento de identidad.',
             'telefono.max' => 'El teléfono no puede superar 20 caracteres.',
+            'numero_licencia.unique' => 'Ya existe un empleado registrado con ese número de licencia.',
             'numero_licencia.max' => 'El número de licencia no puede superar 30 caracteres.',
             'fecha_contratacion.date' => 'La fecha de contratación no es válida.',
             'fecha_contratacion.before_or_equal' => 'La fecha de contratación no puede ser futura.',

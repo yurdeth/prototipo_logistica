@@ -9,8 +9,8 @@ use Illuminate\Validation\Rule;
 class UpdateEmpleadoRequest extends StoreEmpleadoRequest
 {
     /**
-     * Mismas reglas que el registro, pero documento y cuenta de usuario únicos
-     * ignoran al empleado que se está editando.
+     * Mismas reglas que el registro, pero documento, licencia y cuenta de
+     * usuario únicos ignoran al empleado que se está editando.
      *
      * @return array<string, mixed>
      */
@@ -26,6 +26,12 @@ class UpdateEmpleadoRequest extends StoreEmpleadoRequest
             'string',
             'max:20',
             Rule::unique(Empleado::class, 'documento_identidad')->ignore($idActual),
+        ];
+        $reglas['numero_licencia'] = [
+            'nullable',
+            'string',
+            'max:30',
+            Rule::unique(Empleado::class, 'numero_licencia')->ignore($idActual),
         ];
         $reglas['usuario_id'] = [
             'nullable',
