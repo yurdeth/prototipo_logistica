@@ -17,6 +17,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -49,7 +50,16 @@ class DespachoController extends Controller
         return Inertia::render('rutas/RutasIndex', [
             'despachos' => self::paraPanel(),
             'conexiones' => self::conexiones(),
+            'permisos' => $this->permisos(),
         ]);
+    }
+
+    /** @return array<string, bool> */
+    private function permisos(): array
+    {
+        return [
+            'gestionar' => Gate::allows('despachos.gestionar'),
+        ];
     }
 
     public function create(): Response

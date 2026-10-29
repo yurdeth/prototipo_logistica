@@ -420,8 +420,8 @@ const campoClase =
         <EncabezadoAcciones
             title="Clientes"
             subtitle="Personas y empresas que envían o reciben paquetes"
-            accion="Nuevo cliente"
-            href="/clientes/crear"
+            :accion="permisos.registrar ? 'Nuevo cliente' : undefined"
+            :href="permisos.registrar ? '/clientes/crear' : undefined"
             @exportar="exportar"
         />
 

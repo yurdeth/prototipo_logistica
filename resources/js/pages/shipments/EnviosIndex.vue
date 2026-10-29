@@ -437,8 +437,8 @@ const campoClase =
         <EncabezadoAcciones
             title="Envíos"
             subtitle="Seguimiento de entregas y cumplimiento de compromisos"
-            accion="Nuevo envío"
-            href="/envios/crear"
+            :accion="permisos.registrar ? 'Nuevo envío' : undefined"
+            :href="permisos.registrar ? '/envios/crear' : undefined"
             @exportar="exportar"
         />
 

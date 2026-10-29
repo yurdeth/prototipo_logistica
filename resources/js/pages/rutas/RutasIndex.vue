@@ -67,7 +67,11 @@ defineOptions({
     },
 });
 
-const props = defineProps<{ despachos: Despacho[]; conexiones: Conexion[] }>();
+const props = defineProps<{
+    despachos: Despacho[];
+    conexiones: Conexion[];
+    permisos: { gestionar: boolean };
+}>();
 
 // Datos, indicadores y funciones de la vista.
 const {
@@ -331,8 +335,8 @@ const resumen = (d: Despacho) => {
         <EncabezadoAcciones
             title="Rutas y despachos"
             subtitle="Planificación, seguimiento y eficiencia de las salidas"
-            accion="Nuevo despacho"
-            href="/rutas/crear"
+            :accion="permisos.gestionar ? 'Nuevo despacho' : undefined"
+            :href="permisos.gestionar ? '/rutas/crear' : undefined"
             @exportar="exportarCsv"
         >
             <template #acciones>

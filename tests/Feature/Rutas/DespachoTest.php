@@ -99,7 +99,23 @@ class DespachoTest extends TestCase
                 fn ($page) => $page
                     ->component('rutas/RutasIndex')
                     ->has('despachos')
-                    ->has('conexiones', 11),
+                    ->has('conexiones', 11)
+                    ->where('permisos.gestionar', true),
+            );
+    }
+
+    /** El analista consulta el índice pero no ve la acción de crear despachos. */
+    public function test_el_analista_no_tiene_permiso_de_gestionar_despachos_en_el_indice(): void
+    {
+        $analista = $this->usuarioConRol('analista');
+
+        $this->actingAs($analista)
+            ->get('/rutas')
+            ->assertOk()
+            ->assertInertia(
+                fn ($page) => $page
+                    ->component('rutas/RutasIndex')
+                    ->where('permisos.gestionar', false),
             );
     }
 

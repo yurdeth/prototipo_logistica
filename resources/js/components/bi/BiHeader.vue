@@ -3,12 +3,13 @@ import { Link } from '@inertiajs/vue3';
 import { colors } from '@/UI/Colors';
 import { Download, Plus } from '@/UI/Icons';
 
-// `href` es la ruta del formulario de creación.
+// `href` es la ruta del formulario de creación. Sin `accion` no se muestra el botón
+// (p. ej. el rol carece del permiso de registrar).
 defineProps<{
     title: string;
     subtitle: string;
-    accion: string;
-    href: string;
+    accion?: string;
+    href?: string;
 }>();
 defineEmits<{ exportar: [] }>();
 </script>
@@ -37,9 +38,10 @@ defineEmits<{ exportar: [] }>();
                 Exportar
             </button>
 
-            <!-- Navega al formulario de creación. -->
+            <!-- Navega al formulario de creación; solo si la vista lo autoriza. -->
             <Link
-                :href="href"
+                v-if="accion"
+                :href="href ?? '#'"
                 class="inline-flex h-10 items-center gap-2 rounded-lg px-4 text-sm font-medium text-white transition-opacity hover:opacity-90"
                 :style="{ backgroundColor: colors.azulClaro }"
             >
