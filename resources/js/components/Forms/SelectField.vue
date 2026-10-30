@@ -9,6 +9,8 @@ const props = defineProps<{
     options?: T[];
     groups?: { label: string; options: T[] }[];
     optionLabel?: (o: T) => string;
+    // Devuelve el motivo para deshabilitar la opción (se muestra tras el nombre); null = habilitada
+    optionDisabled?: (o: T) => string | null;
     required?: boolean;
     error?: string;
     hint?: string;
@@ -20,6 +22,12 @@ const etiqueta = (o: T) =>
     props.optionLabel
         ? props.optionLabel(o)
         : String((o as { nombre?: string }).nombre ?? o.id);
+
+const textoOpcion = (o: T) => {
+    const motivo = props.optionDisabled?.(o) ?? null;
+
+    return motivo ? `${etiqueta(o)} — ${motivo}` : etiqueta(o);
+};
 </script>
 
 <template>
@@ -42,14 +50,24 @@ const etiqueta = (o: T) =>
 
             <template v-if="groups">
                 <optgroup v-for="g in groups" :key="g.label" :label="g.label">
-                    <option v-for="o in g.options" :key="o.id" :value="o.id">
-                        {{ etiqueta(o) }}
+                    <option
+                        v-for="o in g.options"
+                        :key="o.id"
+                        :value="o.id"
+                        :disabled="(optionDisabled?.(o) ?? null) !== null"
+                    >
+                        {{ textoOpcion(o) }}
                     </option>
                 </optgroup>
             </template>
             <template v-else>
-                <option v-for="o in options" :key="o.id" :value="o.id">
-                    {{ etiqueta(o) }}
+                <option
+                    v-for="o in options"
+                    :key="o.id"
+                    :value="o.id"
+                    :disabled="(optionDisabled?.(o) ?? null) !== null"
+                >
+                    {{ textoOpcion(o) }}
                 </option>
             </template>
         </select>

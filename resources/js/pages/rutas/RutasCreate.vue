@@ -391,6 +391,37 @@ const estaOcupado = (
     valor !== null &&
     props.ocupados.some((o) => o.fecha === form.fecha && o[campo] === valor);
 
+/* La reserva es por día: el recurso ocupado para la fecha elegida no se
+   puede seleccionar; para otra fecha vuelve a estar disponible. */
+const motivoOcupacion = (
+    campo: 'conductor_id' | 'vehiculo_id',
+    id: number,
+): string | null => {
+    const ocupacion = props.ocupados.find(
+        (o) => o.fecha === form.fecha && o[campo] === id,
+    );
+
+    return ocupacion ? `Ocupado el ${form.fecha}` : null;
+};
+
+const motivoConductor = (c: OpcionSimple) =>
+    motivoOcupacion('conductor_id', c.id);
+const motivoVehiculo = (v: Vehiculo) => motivoOcupacion('vehiculo_id', v.id);
+
+// Si la fecha cambia a un día donde el recurso elegido está ocupado, se libera
+watch(
+    () => form.fecha,
+    () => {
+        if (estaOcupado('conductor_id', form.conductor_empleado_id)) {
+            form.conductor_empleado_id = null;
+        }
+
+        if (estaOcupado('vehiculo_id', form.vehiculo_id)) {
+            form.vehiculo_id = null;
+        }
+    },
+);
+
 const avisos = computed<Aviso[]>(() => {
     const lista: Aviso[] = [];
 
@@ -539,6 +570,7 @@ const btnIcono =
                             label="Conductor responsable"
                             placeholder="Seleccionar conductor"
                             :options="conductores"
+                            :option-disabled="motivoConductor"
                             required
                             :error="form.errors.conductor_empleado_id"
                         />
@@ -549,6 +581,7 @@ const btnIcono =
                             placeholder="Seleccionar vehículo"
                             :options="vehiculos"
                             :option-label="etiquetaVehiculo"
+                            :option-disabled="motivoVehiculo"
                             required
                             :error="form.errors.vehiculo_id"
                         />
