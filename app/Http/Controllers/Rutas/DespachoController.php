@@ -72,12 +72,14 @@ class DespachoController extends Controller
             'conductores' => Empleado::query()
                 ->whereNotNull('numero_licencia')
                 ->where('activo', true)
+                ->whereNotExists(self::asignacionVigente('d.conductor_empleado_id', 'personal.empleados.id_empleado'))
                 ->orderBy('apellidos')
                 ->get()
                 ->map(fn (Empleado $e) => ['id' => $e->id_empleado, 'nombre' => "{$e->nombres} {$e->apellidos}"]),
             'vehiculos' => Vehiculo::query()
                 ->with('tipo')
                 ->whereHas('estado', fn ($q) => $q->where('nombre_estado', 'DISPONIBLE'))
+                ->whereNotExists(self::asignacionVigente('d.vehiculo_id', 'flota.vehiculos.id_vehiculo'))
                 ->orderBy('placa')
                 ->get()
                 ->map(fn (Vehiculo $v) => [
@@ -91,6 +93,20 @@ class DespachoController extends Controller
             'envios' => self::enviosDisponibles(),
             'ocupados' => self::ocupaciones(),
         ]);
+    }
+
+    /**
+     * Subconsulta de asignaciones a despachos sin cerrar: un recurso ligado a un
+     * despacho PLANIFICADO o EN_CURSO queda excluido de las opciones del formulario.
+     *
+     * @return Builder
+     */
+    private static function asignacionVigente(string $columnaDespacho, string $columnaRecurso)
+    {
+        return DB::table('rutas.despachos as d')
+            ->join('rutas.estados_despachos as s', 's.id_estado', '=', 'd.estado_despacho_id')
+            ->whereColumn($columnaDespacho, $columnaRecurso)
+            ->whereIn('s.nombre_estado', ['PLANIFICADO', 'EN_CURSO']);
     }
 
     public function store(StoreDespachoRequest $request): RedirectResponse

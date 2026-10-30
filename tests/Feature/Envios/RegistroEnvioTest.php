@@ -64,6 +64,18 @@ class RegistroEnvioTest extends TestCase
         expect(Envio::count())->toBe(1);
     }
 
+    /** Un envío puede entregarse dentro del mismo territorio de su sucursal de origen. */
+    public function test_acepta_destino_en_el_territorio_de_la_sucursal_de_origen(): void
+    {
+        $origen = Sucursal::query()->where('codigo', 'SUC-SMG')->firstOrFail();
+
+        $this->actingAs($this->admin)
+            ->post('/envios', $this->payload(['territorio_destino_id' => $origen->territorio_id]))
+            ->assertRedirect();
+
+        expect(Envio::count())->toBe(1);
+    }
+
     /** Tope operativo: capacidad del camión pesado más grande de la flota (18 000 kg, Tabla 3.2). */
     public function test_rechaza_peso_que_excede_el_tope_operativo(): void
     {

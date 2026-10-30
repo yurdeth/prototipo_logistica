@@ -146,6 +146,36 @@ class DespachoTest extends TestCase
             ->and((float) $despacho->km_planificados)->toBe(120.0);
     }
 
+    /** Con un despacho sin cerrar, el formulario ya no ofrece su conductor ni su vehículo; al completarlo, vuelven. */
+    public function test_oculta_conductor_y_vehiculo_con_despacho_sin_cerrar(): void
+    {
+        $this->actingAs($this->operador)
+            ->post('/rutas', $this->payload())
+            ->assertRedirect(route('rutas.index'));
+
+        $this->actingAs($this->operador)
+            ->get('/rutas/crear')
+            ->assertOk()
+            ->assertInertia(
+                fn ($page) => $page
+                    ->where('conductores', fn ($c) => $c->count() === 0)
+                    ->where('vehiculos', fn ($v) => $v->count() === 0),
+            );
+
+        DB::table('rutas.despachos')->update([
+            'estado_despacho_id' => DB::table('rutas.estados_despachos')->where('nombre_estado', 'COMPLETADO')->value('id_estado'),
+        ]);
+
+        $this->actingAs($this->operador)
+            ->get('/rutas/crear')
+            ->assertOk()
+            ->assertInertia(
+                fn ($page) => $page
+                    ->where('conductores', fn ($c) => $c->count() === 1)
+                    ->where('vehiculos', fn ($v) => $v->count() === 1),
+            );
+    }
+
     public function test_el_seguimiento_conserva_todas_las_paradas_aunque_se_filtre_por_estado(): void
     {
         $envios = [

@@ -3,7 +3,6 @@
 namespace App\Concerns\Envios;
 
 use Closure;
-use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -76,28 +75,6 @@ trait ReglasEnvio
             'estado' => 'estado',
             'nota' => 'nota',
         ];
-    }
-
-    /** Validaciones que cruzan campos; solo corren si los campos involucrados ya pasaron las reglas básicas. */
-    /** @return array<callable(Validator): void> */
-    public function after(): array
-    {
-        return [function (Validator $v): void {
-            if ($v->errors()->hasAny(['sucursal_origen_id', 'territorio_destino_id'])) {
-                return;
-            }
-
-            $territorioOrigen = DB::table('territorio.sucursales')
-                ->where('id_sucursal', $this->input('sucursal_origen_id'))
-                ->value('territorio_id');
-
-            if ($territorioOrigen !== null && (int) $territorioOrigen === (int) $this->input('territorio_destino_id')) {
-                $v->errors()->add(
-                    'territorio_destino_id',
-                    'El destino no puede ser el mismo territorio donde está la sucursal de origen.'
-                );
-            }
-        }];
     }
 
     /** Regla "existe" compatible con tablas dentro de un schema PostgreSQL. */
