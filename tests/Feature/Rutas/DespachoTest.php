@@ -390,8 +390,28 @@ class DespachoTest extends TestCase
         expect($respuesta->json('data.0.id_envio'))->toBe($envio->id_envio)
             ->and($respuesta->json('data.0.codigo_guia'))->toBe($envio->codigo_guia)
             ->and(array_keys($respuesta->json('data.0')))->toBe([
-                'id_envio', 'codigo_guia', 'destino', 'peso_kg', 'prioridad', 'fecha_comprometida',
+                'id_envio', 'codigo_guia', 'destino', 'peso_kg', 'prioridad', 'fecha_comprometida', 'sucursal_origen_id',
             ]);
+    }
+
+    /** El paginador acepta la sucursal del despacho y solo devuelve su origen. */
+    public function test_la_busqueda_filtra_por_sucursal_de_origen(): void
+    {
+        $envioPropio = $this->envioDeLaSucursal();
+        $otraSucursal = Sucursal::query()->where('id_sucursal', '!=', $this->sucursal->id_sucursal)->firstOrFail();
+        $envioAjeno = Envio::factory()->hasta('EN_CENTRO')->create(['sucursal_origen_id' => $otraSucursal->id_sucursal]);
+
+        $this->actingAs($this->operador)
+            ->getJson('/rutas/envios/buscar?sucursal_id='.$this->sucursal->id_sucursal)
+            ->assertOk()
+            ->assertJsonFragment(['id_envio' => $envioPropio->id_envio])
+            ->assertJsonMissing(['id_envio' => $envioAjeno->id_envio]);
+
+        $this->actingAs($this->operador)
+            ->getJson('/rutas/envios/buscar?sucursal_id='.$otraSucursal->id_sucursal)
+            ->assertOk()
+            ->assertJsonFragment(['id_envio' => $envioAjeno->id_envio])
+            ->assertJsonMissing(['id_envio' => $envioPropio->id_envio]);
     }
 
     public function test_la_busqueda_encuentra_envios_por_territorio_de_destino(): void

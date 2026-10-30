@@ -133,10 +133,21 @@ const cargar = async (reiniciar: boolean) => {
 
     const pagina = reiniciar ? 1 : paginaSiguiente.value;
 
+    // El filtro de sucursal viaja en TODAS las páginas: cada llamada del
+    // scroll infinito pide solo envíos de la sucursal de origen del despacho.
+    const filtroSucursal =
+        form.sucursal_origen_id !== null
+            ? { sucursal_id: form.sucursal_origen_id }
+            : {};
+
     try {
         const respuesta = await fetch(
             buscarEnviosRuta.url({
-                query: { q: busqueda.value.trim(), page: pagina },
+                query: {
+                    q: busqueda.value.trim(),
+                    page: pagina,
+                    ...filtroSucursal,
+                },
             }),
             {
                 signal: controlador.signal,
@@ -169,6 +180,23 @@ const cargar = async (reiniciar: boolean) => {
     }
 };
 
+/* Sin término de búsqueda y sin sucursal elegida, vuelve a la página precargada;
+   con sucursal elegida, pide al servidor la lista ya filtrada. */
+const reiniciarListado = () => {
+    if (form.sucursal_origen_id !== null) {
+        void cargar(true);
+
+        return;
+    }
+
+    controlador?.abort();
+    cargando.value = false;
+    errorBusqueda.value = null;
+    items.value = [...props.envios];
+    paginaSiguiente.value = 2;
+    hayMas.value = props.envios.length >= TAM_PAGINA;
+};
+
 watch(busqueda, (valor) => {
     clearTimeout(temporizador);
 
@@ -179,15 +207,17 @@ watch(busqueda, (valor) => {
             return;
         }
 
-        // Sin término: vuelve a la página precargada y reinicia la paginación
-        controlador?.abort();
-        cargando.value = false;
-        errorBusqueda.value = null;
-        items.value = [...props.envios];
-        paginaSiguiente.value = 2;
-        hayMas.value = props.envios.length >= TAM_PAGINA;
+        reiniciarListado();
     }, 300);
 });
+
+watch(
+    () => form.sucursal_origen_id,
+    () => {
+        clearTimeout(temporizador);
+        reiniciarListado();
+    },
+);
 
 onBeforeUnmount(() => {
     clearTimeout(temporizador);
@@ -295,6 +325,11 @@ const cargaColor = computed(() =>
 const cabeEnVehiculo = (e: EnvioDisponible) =>
     !!vehiculo.value?.capacidad_kg &&
     pesoTotal.value + e.peso_kg <= vehiculo.value.capacidad_kg;
+
+// El despacho solo levanta envíos registrados en su sucursal de origen
+const deOtraSucursal = (e: EnvioDisponible) =>
+    form.sucursal_origen_id !== null &&
+    e.sucursal_origen_id !== form.sucursal_origen_id;
 
 const capacidadLibre = computed(() =>
     vehiculo.value?.capacidad_kg
@@ -716,7 +751,9 @@ const btnIcono =
                                         type="button"
                                         class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-600 transition hover:border-blue-600 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-300 disabled:hover:bg-white disabled:hover:text-slate-600"
                                         :disabled="
-                                            !vehiculo || !cabeEnVehiculo(e)
+                                            !vehiculo ||
+                                            !cabeEnVehiculo(e) ||
+                                            deOtraSucursal(e)
                                         "
                                         :aria-label="
                                             !vehiculo
@@ -726,9 +763,11 @@ const btnIcono =
                                         :title="
                                             !vehiculo
                                                 ? 'Selecciona primero un vehículo'
-                                                : !cabeEnVehiculo(e)
-                                                  ? `Excede la capacidad libre del vehículo (${capacidadLibre?.toFixed(1)} kg disponibles)`
-                                                  : undefined
+                                                : deOtraSucursal(e)
+                                                  ? 'Pertenece a otra sucursal de origen'
+                                                  : !cabeEnVehiculo(e)
+                                                    ? `Excede la capacidad libre del vehículo (${capacidadLibre?.toFixed(1)} kg disponibles)`
+                                                    : undefined
                                         "
                                         @click="agregar(e)"
                                     >

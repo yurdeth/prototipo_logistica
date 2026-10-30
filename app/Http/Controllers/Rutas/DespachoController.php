@@ -18,6 +18,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -43,6 +44,7 @@ class DespachoController extends Controller
         'e.peso_kg',
         'e.prioridad',
         'e.fecha_comprometida',
+        'e.sucursal_origen_id',
     ];
 
     public function index(): Response
@@ -233,12 +235,14 @@ class DespachoController extends Controller
         $validos = $request->validate([
             'q' => ['nullable', 'string', 'max:100'],
             'page' => ['nullable', 'integer', 'min:1'],
+            // La sucursal del despacho: el front la envía en cada página del scroll
+            'sucursal_id' => ['nullable', 'integer', Rule::exists(Sucursal::class, 'id_sucursal')],
         ]);
 
         $pagina = max(1, (int) ($validos['page'] ?? 1));
 
         // Pide una fila más para saber si hay página siguiente sin COUNT(*)
-        $filas = self::consultaEnviosDisponibles($validos['q'] ?? null)
+        $filas = self::consultaEnviosDisponibles($validos['q'] ?? null, $validos['sucursal_id'] ?? null)
             ->offset(($pagina - 1) * self::TAM_PAGINA_ENVIOS)
             ->limit(self::TAM_PAGINA_ENVIOS + 1)
             ->get(self::COLUMNAS_ENVIO);
@@ -250,11 +254,12 @@ class DespachoController extends Controller
     }
 
     /**
-     * Consulta base de envíos disponibles; con término, filtra por guía o destino.
+     * Consulta base de envíos disponibles; con término, filtra por guía o
+     * destino; con sucursal, limita al origen del despacho en curso.
      *
      * @return Builder
      */
-    private static function consultaEnviosDisponibles(?string $termino = null)
+    private static function consultaEnviosDisponibles(?string $termino = null, ?int $sucursalId = null)
     {
         return DB::table('envios.envios as e')
             ->join('envios.estados_envios as s', 's.id_estado', '=', 'e.estado_envio_id')
@@ -262,6 +267,7 @@ class DespachoController extends Controller
             ->join('territorio.territorios as t', 't.id_territorio', '=', 'e.territorio_destino_id')
             ->whereNull('p.id_parada')
             ->whereRaw("s.nombre_estado NOT IN ('ENTREGADO','DEVUELTO','FALLIDO')")
+            ->when($sucursalId !== null, fn ($consulta) => $consulta->where('e.sucursal_origen_id', $sucursalId))
             ->when($termino !== null && $termino !== '', function ($consulta) use ($termino) {
                 $patron = '%'.str_replace(['\\', '%', '_'], ['\\\\', '\%', '\_'], $termino).'%';
 
@@ -283,6 +289,7 @@ class DespachoController extends Controller
             'peso_kg' => (float) $e->peso_kg,
             'prioridad' => $e->prioridad,
             'fecha_comprometida' => Carbon::parse($e->fecha_comprometida)->toISOString(),
+            'sucursal_origen_id' => (int) $e->sucursal_origen_id,
         ];
     }
 

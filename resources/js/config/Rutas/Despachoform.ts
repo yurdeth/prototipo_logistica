@@ -24,6 +24,7 @@ export interface EnvioDisponible {
     peso_kg: number;
     prioridad: Prioridad;
     fecha_comprometida: string; // ISO
+    sucursal_origen_id: number;
 }
 
 // Despachos ya existentes, para detectar conductor/vehículo ocupado ese día
@@ -120,6 +121,7 @@ export function generarEnviosDisponiblesDemo(): EnvioDisponible[] {
         peso_kg: peso,
         prioridad,
         fecha_comprometida: new Date(now + horas * H).toISOString(),
+        sucursal_origen_id: (i % 3) + 1,
     }));
 }
 
