@@ -48,6 +48,11 @@ Route::middleware(['auth'])->group(function () {
             Route::get('crear', [DespachoController::class, 'create'])->name('create');
             Route::get('envios/buscar', [DespachoController::class, 'buscarEnvios'])->name('envios.buscar');
             Route::post('/', [DespachoController::class, 'store'])->name('store');
+
+            // Ejecución del despacho: avance de estado e incidencias
+            Route::post('{despacho}/incidencias', [DespachoController::class, 'registrarIncidencia'])->whereNumber('despacho')->name('incidencias');
+            Route::post('{despacho}/iniciar', [DespachoController::class, 'iniciar'])->whereNumber('despacho')->name('iniciar');
+            Route::post('{despacho}/finalizar', [DespachoController::class, 'finalizar'])->whereNumber('despacho')->name('finalizar');
         });
     });
 

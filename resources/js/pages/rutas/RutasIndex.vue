@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, toValue } from 'vue';
-import { Head, Link } from '@inertiajs/vue3';
+import { computed, reactive, ref, toValue } from 'vue';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { colors } from '@/UI/Colors';
 import { dashboard } from '@/routes';
 import { MapPin } from '@/UI/Icons';
@@ -48,6 +48,8 @@ import BiFields from '@/components/bi/DetailFields.vue';
 import BiTimeline from '@/components/bi/BiTimeline.vue';
 import BiBadge from '@/components/bi/BiBadge.vue';
 import BiStatus from '@/components/bi/BiStatus.vue';
+import InputField from '@/components/Forms/InputField.vue';
+import SelectField from '@/components/Forms/SelectField.vue';
 import type {
     Activo,
     BarRow,
@@ -70,6 +72,7 @@ defineOptions({
 const props = defineProps<{
     despachos: Despacho[];
     conexiones: Conexion[];
+    tipos_incidencia: { id: number; nombre: string }[];
     permisos: { gestionar: boolean };
 }>();
 
@@ -324,6 +327,70 @@ const paradas = (d: Despacho): TimelineItem[] =>
 const resumen = (d: Despacho) => {
     const r = resumenParadas(d, toValue(now));
     return `${r.aTiempo} de ${r.evaluadas} a tiempo`;
+};
+
+// Ejecución del despacho: iniciar, finalizar e incidencias
+const formFinal = reactive<{ km: string; horas: Record<number, string> }>({
+    km: '',
+    horas: {},
+});
+
+const finalizar = (d: Despacho) => {
+    router.post(
+        `/rutas/${d.id_despacho}/finalizar`,
+        {
+            km_recorridos: formFinal.km === '' ? null : Number(formFinal.km),
+            paradas: d.paradas.map((p) => ({
+                id_parada: p.id_parada,
+                hora_real: formFinal.horas[p.id_parada] || null,
+            })),
+        },
+        { preserveScroll: true },
+    );
+};
+
+const iniciar = (d: Despacho) => {
+    router.post(
+        `/rutas/${d.id_despacho}/iniciar`,
+        {},
+        { preserveScroll: true },
+    );
+};
+
+const formIncidencia = reactive<{
+    tipo: number | null;
+    minutos: string;
+    envio: number | null;
+    nota: string;
+}>({
+    tipo: null,
+    minutos: '',
+    envio: null,
+    nota: '',
+});
+
+const enviosDelDespacho = (d: Despacho) =>
+    d.paradas.map((p) => ({ id: p.envio_id, nombre: `Guía ${p.codigo_guia}` }));
+
+const registrarIncidencia = (d: Despacho) => {
+    router.post(
+        `/rutas/${d.id_despacho}/incidencias`,
+        {
+            tipo_incidencia_id: formIncidencia.tipo,
+            minutos_retraso: Number(formIncidencia.minutos || 0),
+            envio_id: formIncidencia.envio,
+            descripcion: formIncidencia.nota || null,
+        },
+        {
+            preserveScroll: true,
+            onSuccess: () => {
+                formIncidencia.tipo = null;
+                formIncidencia.minutos = '';
+                formIncidencia.envio = null;
+                formIncidencia.nota = '';
+            },
+        },
+    );
 };
 </script>
 
@@ -654,6 +721,110 @@ const resumen = (d: Despacho) => {
                 :items="paradas(seleccionado)"
                 empty="No hay paradas registradas para este despacho."
             />
+
+            <!-- Ejecución del despacho: avance de estado e incidencias -->
+            <div
+                v-if="
+                    permisos.gestionar && seleccionado.estado !== 'COMPLETADO'
+                "
+                class="space-y-4"
+            >
+                <!-- PLANIFICADO: iniciar la salida -->
+                <form
+                    v-if="seleccionado.estado === 'PLANIFICADO'"
+                    class="rounded-lg border border-sidebar-border/70 p-4"
+                    @submit.prevent="iniciar(seleccionado)"
+                >
+                    <button
+                        type="submit"
+                        class="inline-flex h-10 w-full items-center justify-center rounded-md bg-blue-700 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        Iniciar despacho
+                    </button>
+                </form>
+
+                <!-- EN_CURSO: cerrar la ejecución con km y horas reales -->
+                <form
+                    v-else
+                    class="space-y-4 rounded-lg border border-sidebar-border/70 p-4"
+                    @submit.prevent="finalizar(seleccionado)"
+                >
+                    <InputField
+                        id="km-recorridos"
+                        v-model="formFinal.km"
+                        label="Kilómetros recorridos"
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        :hint="`Planificados: ${seleccionado.km_planificados?.toFixed(1) ?? '—'} km`"
+                    />
+                    <InputField
+                        v-for="p in seleccionado.paradas"
+                        :key="p.id_parada"
+                        :id="`hora-real-${p.id_parada}`"
+                        v-model="formFinal.horas[p.id_parada]"
+                        :label="`Hora real · parada ${p.orden} (${p.destino})`"
+                        type="datetime-local"
+                        :hint="
+                            p.hora_estimada
+                                ? `Estimada: ${fmtHora(p.hora_estimada)}`
+                                : undefined
+                        "
+                    />
+                    <button
+                        type="submit"
+                        class="inline-flex h-10 w-full items-center justify-center rounded-md bg-blue-700 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        Finalizar despacho
+                    </button>
+                </form>
+
+                <!-- Incidencia reportada por el conductor, en su nombre -->
+                <form
+                    class="space-y-4 rounded-lg border border-sidebar-border/70 p-4"
+                    @submit.prevent="registrarIncidencia(seleccionado)"
+                >
+                    <p class="text-sm font-medium text-foreground">
+                        Registrar incidencia
+                    </p>
+                    <SelectField
+                        id="tipo-incidencia"
+                        v-model="formIncidencia.tipo"
+                        label="Tipo"
+                        placeholder="Seleccionar tipo"
+                        :options="tipos_incidencia"
+                        required
+                    />
+                    <InputField
+                        id="minutos-retraso"
+                        v-model="formIncidencia.minutos"
+                        label="Minutos de retraso"
+                        type="number"
+                        min="0"
+                        required
+                    />
+                    <SelectField
+                        id="envio-incidencia"
+                        v-model="formIncidencia.envio"
+                        label="Envío afectado"
+                        placeholder="Todo el despacho"
+                        :options="enviosDelDespacho(seleccionado)"
+                    />
+                    <InputField
+                        id="descripcion-incidencia"
+                        v-model="formIncidencia.nota"
+                        label="Descripción"
+                        type="text"
+                        placeholder="Detalle de la novedad"
+                    />
+                    <button
+                        type="submit"
+                        class="inline-flex h-10 w-full items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                        Registrar incidencia
+                    </button>
+                </form>
+            </div>
         </BiDrawer>
     </div>
 </template>

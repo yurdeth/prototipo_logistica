@@ -15,6 +15,7 @@ export type EstadoParada =
 
 export interface Parada {
     id_parada: number;
+    envio_id: number; // FK a envios.envios
     orden: number;
     codigo_guia: string; // de envios.envios
     destino: string;

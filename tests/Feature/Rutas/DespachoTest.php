@@ -13,6 +13,7 @@ use App\Models\Vehiculo;
 use Database\Seeders\EstadoVehiculoSeeder;
 use Database\Seeders\MarcaVehiculoSeeder;
 use Database\Seeders\ModeloVehiculoSeeder;
+use Database\Seeders\ParametroSeeder;
 use Database\Seeders\RedLogisticaSeeder;
 use Database\Seeders\RoleSeeder;
 use Database\Seeders\TipoVehiculoSeeder;
@@ -486,5 +487,158 @@ class DespachoTest extends TestCase
             ->getJson('/rutas/envios/buscar?q='.rawurlencode($asignado->codigo_guia))
             ->assertOk()
             ->assertJsonCount(0, 'data');
+    }
+
+    /* Ejecución del despacho: avance de estado e incidencias. */
+
+    private function estadoDespachoId(string $nombre): int
+    {
+        return (int) DB::table('rutas.estados_despachos')->where('nombre_estado', $nombre)->value('id_estado');
+    }
+
+    /** El despacho recién programado por el operador. */
+    private function despachoReciente(): Despacho
+    {
+        $this->actingAs($this->operador)->post('/rutas', $this->payload())->assertRedirect();
+
+        return Despacho::query()->latest('id_despacho')->first();
+    }
+
+    /** Fila vigente del despacho (los asserts con esquema.tabla van por DB::table). */
+    private function filaDespacho(Despacho $despacho): object
+    {
+        return DB::table('rutas.despachos')->where('id_despacho', $despacho->id_despacho)->first();
+    }
+
+    public function test_el_despacho_avanza_de_planificado_a_completado_con_su_ejecucion(): void
+    {
+        $despacho = $this->despachoReciente();
+        $parada = $despacho->paradas()->first();
+
+        $this->post("/rutas/{$despacho->id_despacho}/iniciar")
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $this->assertSame($this->estadoDespachoId('EN_CURSO'), (int) $this->filaDespacho($despacho)->estado_despacho_id);
+
+        $this->post("/rutas/{$despacho->id_despacho}/finalizar", [
+            'km_recorridos' => 128.4,
+            'paradas' => [
+                ['id_parada' => $parada->id_parada, 'hora_real' => now()->setTime(9, 25)->toISOString()],
+            ],
+        ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $fila = $this->filaDespacho($despacho);
+        $this->assertSame($this->estadoDespachoId('COMPLETADO'), (int) $fila->estado_despacho_id);
+        $this->assertSame(128.4, (float) $fila->km_recorridos);
+
+        $this->assertNotNull(
+            DB::table('rutas.despacho_paradas')->where('id_parada', $parada->id_parada)->value('hora_real')
+        );
+    }
+
+    public function test_no_se_puede_finalizar_un_despacho_que_no_esta_en_curso(): void
+    {
+        $despacho = $this->despachoReciente();
+
+        $this->post("/rutas/{$despacho->id_despacho}/finalizar", ['km_recorridos' => 10])
+            ->assertSessionHasErrors('estado');
+
+        $this->assertSame($this->estadoDespachoId('PLANIFICADO'), (int) $this->filaDespacho($despacho)->estado_despacho_id);
+    }
+
+    public function test_la_hora_real_de_una_parada_no_puede_ser_anterior_a_la_estimada(): void
+    {
+        $despacho = $this->despachoReciente();
+        $parada = $despacho->paradas()->first();
+
+        $this->post("/rutas/{$despacho->id_despacho}/iniciar")->assertSessionHas('success');
+
+        $this->post("/rutas/{$despacho->id_despacho}/finalizar", [
+            'paradas' => [
+                // la parada se estimó a las 09:00 en payload()
+                ['id_parada' => $parada->id_parada, 'hora_real' => now()->setTime(8, 0)->toISOString()],
+            ],
+        ])->assertSessionHasErrors();
+
+        $this->assertSame($this->estadoDespachoId('EN_CURSO'), (int) $this->filaDespacho($despacho)->estado_despacho_id);
+    }
+
+    public function test_registra_una_incidencia_asociada_al_despacho(): void
+    {
+        $despacho = $this->despachoReciente();
+        $envioId = $despacho->paradas()->first()->envio_id;
+        $tipoId = (int) DB::table('rutas.tipos_incidencias')->where('nombre_tipo', 'TRANSITO')->value('id_tipo');
+
+        $this->post("/rutas/{$despacho->id_despacho}/incidencias", [
+            'tipo_incidencia_id' => $tipoId,
+            'minutos_retraso' => 25,
+            'envio_id' => $envioId,
+            'descripcion' => 'Tránsito denso a la salida',
+        ])
+            ->assertRedirect()
+            ->assertSessionHas('success');
+
+        $incidencia = DB::table('rutas.incidencias')
+            ->where('despacho_id', $despacho->id_despacho)
+            ->first();
+
+        $this->assertNotNull($incidencia);
+        $this->assertSame($envioId, $incidencia->envio_id);
+        $this->assertSame($tipoId, $incidencia->tipo_incidencia_id);
+        $this->assertSame(25, $incidencia->minutos_retraso);
+    }
+
+    public function test_rechaza_una_incidencia_sobre_un_envio_ajeno_al_despacho(): void
+    {
+        $despacho = $this->despachoReciente();
+        $ajeno = $this->envioDeLaSucursal();
+        $tipoId = (int) DB::table('rutas.tipos_incidencias')->where('nombre_tipo', 'CLIMA')->value('id_tipo');
+
+        $this->post("/rutas/{$despacho->id_despacho}/incidencias", [
+            'tipo_incidencia_id' => $tipoId,
+            'minutos_retraso' => 10,
+            'envio_id' => $ajeno->id_envio,
+        ])->assertSessionHasErrors('envio_id');
+
+        $this->assertNull(
+            DB::table('rutas.incidencias')
+                ->where('despacho_id', $despacho->id_despacho)
+                ->where('envio_id', $ajeno->id_envio)
+                ->first()
+        );
+    }
+
+    public function test_el_analista_no_puede_registrar_incidencias_ni_avanzar_despachos(): void
+    {
+        $analista = $this->usuarioConRol('analista');
+        $despacho = $this->despachoReciente();
+
+        $this->actingAs($analista)
+            ->post("/rutas/{$despacho->id_despacho}/incidencias", [
+                'tipo_incidencia_id' => 1,
+                'minutos_retraso' => 5,
+            ])
+            ->assertForbidden();
+
+        $this->actingAs($analista)
+            ->post("/rutas/{$despacho->id_despacho}/iniciar")
+            ->assertForbidden();
+
+        $this->assertSame($this->estadoDespachoId('PLANIFICADO'), (int) $this->filaDespacho($despacho)->estado_despacho_id);
+    }
+
+    public function test_el_formulario_toma_el_costo_por_km_del_parametro(): void
+    {
+        $this->seed(ParametroSeeder::class);
+
+        $this->actingAs($this->operador)
+            ->get('/rutas/crear')
+            ->assertOk()
+            ->assertInertia(
+                fn ($page) => $page->where('vehiculos.0.costo_km', 1.25)
+            );
     }
 }

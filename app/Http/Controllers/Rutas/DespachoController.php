@@ -4,11 +4,15 @@ namespace App\Http\Controllers\Rutas;
 
 use App\Enums\EstadoDespachoEnum;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Rutas\FinalizarDespachoRequest;
 use App\Http\Requests\Rutas\StoreDespachoRequest;
+use App\Http\Requests\Rutas\StoreIncidenciaRequest;
 use App\Models\Despacho;
 use App\Models\DespachoParada;
 use App\Models\Empleado;
+use App\Models\Parametro;
 use App\Models\Sucursal;
+use App\Models\TipoIncidencia;
 use App\Models\Vehiculo;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
@@ -19,6 +23,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -52,6 +57,9 @@ class DespachoController extends Controller
         return Inertia::render('rutas/RutasIndex', [
             'despachos' => self::paraPanel(),
             'conexiones' => self::conexiones(),
+            'tipos_incidencia' => TipoIncidencia::query()
+                ->orderBy('id_tipo')
+                ->get(['id_tipo as id', 'nombre_tipo as nombre']),
             'permisos' => $this->permisos(),
         ]);
     }
@@ -66,6 +74,10 @@ class DespachoController extends Controller
 
     public function create(): Response
     {
+        // costo por kilómetro vigente del escenario (rutas.parametros); la
+        // vista lo usa para estimar el costo del despacho que se programa
+        $costoKm = Parametro::query()->vigente('costo_km')->value('valor');
+
         return Inertia::render('rutas/RutasCreate', [
             'sucursales' => Sucursal::query()
                 ->where('activa', true)
@@ -89,8 +101,7 @@ class DespachoController extends Controller
                     'placa' => $v->placa,
                     'tipo' => $v->tipo->nombre,
                     'capacidad_kg' => (float) $v->tipo->capacidad_kg,
-                    // la flota aún no registra costo por km; la vista lo tolera en null
-                    'costo_km' => null,
+                    'costo_km' => $costoKm !== null ? (float) $costoKm : null,
                 ]),
             'envios' => self::enviosDisponibles(),
             'ocupados' => self::ocupaciones(),
@@ -124,6 +135,89 @@ class DespachoController extends Controller
     }
 
     /**
+     * Registra una incidencia asociada al despacho, en representación del
+     * conductor que la reporta. El despacho queda como contexto obligatorio;
+     * el envío afectado, opcional.
+     */
+    public function registrarIncidencia(StoreIncidenciaRequest $request, int $despacho): RedirectResponse
+    {
+        $datos = $request->validated();
+        $modelo = Despacho::query()->findOrFail($despacho);
+
+        $modelo->incidencias()->create([
+            'tipo_incidencia_id' => $datos['tipo_incidencia_id'],
+            'envio_id' => $datos['envio_id'] ?? null,
+            'ocurrio_en' => now(),
+            'descripcion' => $datos['descripcion'] ?? null,
+            'minutos_retraso' => $datos['minutos_retraso'],
+        ]);
+
+        return back()->with('success', "Incidencia registrada al despacho {$this->codigo($modelo)}.");
+    }
+
+    /** PLANIFICADO → EN_CURSO: la salida inicia su ejecución. */
+    public function iniciar(int $despacho): RedirectResponse
+    {
+        $modelo = DB::transaction(
+            fn (): Despacho => $this->transicionar($despacho, EstadoDespachoEnum::PLANIFICADO->value, EstadoDespachoEnum::EN_CURSO->value)
+        );
+
+        return back()->with('success', "Despacho {$this->codigo($modelo)} en curso.");
+    }
+
+    /** EN_CURSO → COMPLETADO, con los kilómetros recorridos y las horas
+     *  reales de llegada de cada parada. */
+    public function finalizar(FinalizarDespachoRequest $request, int $despacho): RedirectResponse
+    {
+        $datos = $request->validated();
+
+        $modelo = DB::transaction(function () use ($datos, $despacho): Despacho {
+            $modelo = $this->transicionar($despacho, EstadoDespachoEnum::EN_CURSO->value, EstadoDespachoEnum::COMPLETADO->value);
+
+            if (array_key_exists('km_recorridos', $datos)) {
+                $modelo->update(['km_recorridos' => $datos['km_recorridos']]);
+            }
+
+            foreach ((array) ($datos['paradas'] ?? []) as $parada) {
+                DespachoParada::query()
+                    ->where('id_parada', $parada['id_parada'])
+                    ->where('despacho_id', $modelo->id_despacho)
+                    ->update([
+                        // reloj de pared, en el mismo marco en que la sesión
+                        // de PostgreSQL interpreta las horas de la operación
+                        'hora_real' => ! empty($parada['hora_real'])
+                            ? Carbon::parse($parada['hora_real'])->format('Y-m-d H:i:s')
+                            : null,
+                    ]);
+            }
+
+            return $modelo;
+        });
+
+        return back()->with('success', "Despacho {$this->codigo($modelo)} completado.");
+    }
+
+    /**
+     * Cambia el estado de un despacho con candado de concurrencia; exige el
+     * estado de origen exacto (no hay saltos ni retrocesos). Debe ejecutarse
+     * dentro de la transacción del llamador.
+     */
+    private function transicionar(int $despacho, string $desde, string $hacia): Despacho
+    {
+        $modelo = Despacho::query()->lockForUpdate()->findOrFail($despacho);
+
+        if ($modelo->estado->nombre_estado !== $desde) {
+            throw ValidationException::withMessages([
+                'estado' => "Transición no permitida: el despacho {$this->codigo($modelo)} está {$modelo->estado->nombre_estado} y se requiere {$desde}.",
+            ]);
+        }
+
+        $modelo->update(['estado_despacho_id' => $this->estadoId($hacia)]);
+
+        return $modelo->refresh();
+    }
+
+    /**
      * Despachos para los paneles, con paradas anidadas; el más reciente primero.
      *
      * @return array<int, array<string, mixed>>
@@ -143,6 +237,7 @@ class DespachoController extends Controller
                     ->values()
                     ->map(fn (DespachoParada $p): array => [
                         'id_parada' => $p->id_parada,
+                        'envio_id' => $p->envio_id,
                         'orden' => $p->orden,
                         'codigo_guia' => $p->envio->codigo_guia,
                         'destino' => $p->envio->territorioDestino->nombre_territorio,
