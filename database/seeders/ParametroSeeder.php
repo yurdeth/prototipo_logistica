@@ -11,6 +11,7 @@ use Illuminate\Database\Seeder;
  *
  * penalizacion_congestion: minutos adicionales que el cálculo de ruta aplica
  * a un tramo marcado como congestionado (escenario de congestión de la demo).
+ * costo_km: costo operativo por kilómetro con el que se estima un despacho.
  */
 class ParametroSeeder extends Seeder
 {
@@ -19,6 +20,7 @@ class ParametroSeeder extends Seeder
      */
     private const PARAMETROS = [
         'penalizacion_congestion' => 15.0,
+        'costo_km' => 1.25,
     ];
 
     public function run(): void
