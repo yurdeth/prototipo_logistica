@@ -15,6 +15,7 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
+import { index as reportesRuta } from '@/routes/reportes';
 import { index as rutasRuta } from '@/routes/rutas';
 import { index as empleadosRuta } from '@/routes/empleados';
 import { index as enviosRuta } from '@/routes/envios';
@@ -33,7 +34,7 @@ const mainNavItems: NavItem[] = [
     { title: 'Empleados', href: empleadosRuta(), icon: Users },
     { title: 'Vehículos', href: vehiculosRuta(), icon: Truck },
     { title: 'Clientes', href: clientes(), icon: Building2 },
-    { title: 'Reportes', href: '#', icon: FileText },
+    { title: 'Reportes', href: reportesRuta(), icon: FileText },
 ];
 </script>
 

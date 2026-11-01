@@ -5,6 +5,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Envios\EnvioController;
 use App\Http\Controllers\Flota\VehiculoController;
 use App\Http\Controllers\Personal\EmpleadoController;
+use App\Http\Controllers\Reportes\ReporteController;
 use App\Http\Controllers\Rutas\DespachoController;
 use App\Http\Controllers\Rutas\RutaMapaController;
 use Illuminate\Support\Facades\Route;
@@ -54,6 +55,12 @@ Route::middleware(['auth'])->group(function () {
             Route::post('{despacho}/iniciar', [DespachoController::class, 'iniciar'])->whereNumber('despacho')->name('iniciar');
             Route::post('{despacho}/finalizar', [DespachoController::class, 'finalizar'])->whereNumber('despacho')->name('finalizar');
         });
+    });
+
+    // Reportes operativos: envíos por vencer, despachos por plazo e incidencias
+    Route::prefix('reportes')->name('reportes.')->group(function () {
+        Route::get('/', [ReporteController::class, 'index'])->name('index');
+        Route::get('exportar', [ReporteController::class, 'exportar'])->name('exportar');
     });
 
     // Flota: vistas y operaciones (sin API; todo por Inertia)
