@@ -475,6 +475,15 @@ const errorParadas = computed(
 );
 
 /* ───────── Envío ───────── */
+
+/** Hora en pared local, sin zona: la BD interpreta las horas de la operación
+ * en el huso de El Salvador, e ISO-UTC desplazaría la estimada +6 h. */
+const paredLocal = (ms: number): string => {
+    const d = new Date(ms);
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+};
+
 const enviar = () => {
     if (!completo.value || form.processing) return;
 
@@ -483,9 +492,7 @@ const enviar = () => {
         paradas: plan.value.map(({ envio, hora }, i) => ({
             envio_id: envio.id_envio,
             orden: i + 1,
-            hora_estimada: Number.isNaN(hora)
-                ? null
-                : new Date(hora).toISOString(),
+            hora_estimada: Number.isNaN(hora) ? null : paredLocal(hora),
         })),
     })).post('/rutas', { preserveScroll: true });
 };

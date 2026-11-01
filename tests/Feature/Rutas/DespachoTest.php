@@ -641,4 +641,19 @@ class DespachoTest extends TestCase
                 fn ($page) => $page->where('vehiculos.0.costo_km', 1.25)
             );
     }
+
+    /** El front envía la estimada como pared local; la BD debe guardarla tal cual, sin corrimiento de zona. */
+    public function test_la_hora_estimada_se_guarda_en_el_reloj_de_pared_enviado(): void
+    {
+        $this->actingAs($this->operador)->post('/rutas', $this->payload([
+            'paradas' => [
+                ['envio_id' => $this->envioDeLaSucursal()->id_envio, 'orden' => 1, 'hora_estimada' => '2026-11-03T08:40:00'],
+            ],
+        ]))->assertRedirect(route('rutas.index'));
+
+        $this->assertSame(
+            '2026-11-03 08:40:00-06',
+            DB::table('rutas.despacho_paradas')->latest('id_parada')->value('hora_estimada')
+        );
+    }
 }
