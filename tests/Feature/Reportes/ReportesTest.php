@@ -210,4 +210,59 @@ class ReportesTest extends TestCase
             // Texto que empieza con = sale neutralizado para Excel
             ->and($csv)->toContain("'=PELIGRO");
     }
+
+    public function test_exporta_solo_la_seccion_de_la_pestaña_pedida(): void
+    {
+        $envio = $this->envioConCompromiso(-5);
+        $transito = DB::table('rutas.tipos_incidencias')->where('nombre_tipo', 'TRANSITO')->value('id_tipo');
+        DB::table('rutas.incidencias')->insert([
+            ['tipo_incidencia_id' => $transito, 'envio_id' => $envio->id_envio, 'minutos_retraso' => 15, 'ocurrio_en' => now()],
+        ]);
+
+        // Pestaña de incidencias: solo esa sección
+        $respuesta = $this->actingAs($this->usuario)
+            ->get('/reportes/exportar?tab=incidencias&dias=0');
+
+        $respuesta->assertOk();
+        $csv = $respuesta->streamedContent();
+        expect($csv)->toContain('INCIDENCIAS')
+            ->and($csv)->not->toContain('ENVÍOS POR VENCER')
+            ->and($csv)->not->toContain('DESPACHOS POR PLAZO');
+
+        // Pestaña de envíos: solo esa sección
+        $respuesta = $this->actingAs($this->usuario)
+            ->get('/reportes/exportar?tab=envios');
+
+        $respuesta->assertOk();
+        $csv = $respuesta->streamedContent();
+        expect($csv)->toContain('ENVÍOS POR VENCER')
+            ->and($csv)->not->toContain('INCIDENCIAS');
+
+        // Sin tab: las tres secciones (comportamiento histórico)
+        $respuesta = $this->actingAs($this->usuario)
+            ->get('/reportes/exportar');
+
+        $respuesta->assertOk();
+        $csv = $respuesta->streamedContent();
+        expect($csv)->toContain('ENVÍOS POR VENCER')
+            ->and($csv)->toContain('INCIDENCIAS');
+    }
+
+    public function test_exporta_el_reporte_en_pdf_horizontal_con_los_filtros(): void
+    {
+        $envio = $this->envioConCompromiso(-5); // vencido
+        $this->envioConCompromiso(120); // en plazo
+
+        $respuesta = $this->actingAs($this->usuario)
+            ->get('/reportes/pdf?plazo=vencido&dias=7');
+
+        $respuesta->assertOk();
+        expect($respuesta->headers->get('Content-Type'))->toContain('application/pdf')
+            ->and($respuesta->headers->get('Content-Disposition'))->toContain('.pdf');
+
+        // El PDF es binario válido y llega como descarga (el contenido interno va comprimido)
+        $pdf = $respuesta->getContent();
+        expect(str_starts_with($pdf, '%PDF'))->toBeTrue()
+            ->and(str_contains($pdf, '/Filter /FlateDecode'))->toBeTrue();
+    }
 }

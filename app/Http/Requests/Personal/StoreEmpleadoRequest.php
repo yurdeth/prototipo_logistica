@@ -28,6 +28,13 @@ class StoreEmpleadoRequest extends FormRequest
         ]);
     }
 
+    /**
+     * Reglas del registro de empleados. Rule::unique/exists con el modelo evita
+     * que el esquema de la tabla ("personal", "territorio") se interprete como
+     * conexión de base de datos.
+     *
+     * @return array<string, ValidationRule|array<mixed>|string>
+     */
     public function rules(): array
     {
         return [

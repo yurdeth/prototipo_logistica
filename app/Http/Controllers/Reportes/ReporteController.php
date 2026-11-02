@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Reportes;
 
 use App\Http\Controllers\Controller;
 use App\Models\TipoIncidencia;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -18,7 +19,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
  * sus envíos e incidencias con su retraso. Todo se calcula sobre la operación
  * vigente; la clasificación de plazo compara la fecha comprometida contra ahora.
  *
- * @phpstan-type Filtros array{plazo: 'vencido'|'vence_pronto'|'en_plazo'|null, tipo: int|null, dias: int}
+ * @phpstan-type Filtros array{plazo: 'vencido'|'vence_pronto'|'en_plazo'|null, tipo: int|null, dias: int, tab: 'envios'|'despachos'|'incidencias'|null}
  */
 class ReporteController extends Controller
 {
@@ -47,7 +48,7 @@ class ReporteController extends Controller
         ]);
     }
 
-    /** Filtros compartidos por el índice y el exporte.
+    /** Filtros compartidos por el índice y el exporte. `tab` solo lo usan los exportes: indica la sección pedida (null = todas).
      * @return Filtros
      */
     private function filtros(Request $request): array
@@ -56,12 +57,14 @@ class ReporteController extends Controller
             'plazo' => ['nullable', Rule::in(['vencido', 'vence_pronto', 'en_plazo'])],
             'tipo' => ['nullable', 'integer', 'min:1'],
             'dias' => ['nullable', 'integer', 'in:0,7,30'],
+            'tab' => ['nullable', Rule::in(['envios', 'despachos', 'incidencias'])],
         ]);
 
         return [
             'plazo' => $validos['plazo'] ?? null,
             'tipo' => isset($validos['tipo']) ? (int) $validos['tipo'] : null,
             'dias' => (int) ($validos['dias'] ?? 0),
+            'tab' => $validos['tab'] ?? null,
         ];
     }
 
@@ -270,15 +273,12 @@ class ReporteController extends Controller
             ');
     }
 
-    /** Detalle paginado de incidencias y su cuadre por tipo para el mismo período.
-     * @param  Filtros  $filtros
-     * @return array{data: list<array<string, mixed>>, pagina: int, ultima: int, total: int, por_tipo: list<array{id: int, tipo: string, total: int, minutos: int}>}
+    /** Cuadre de incidencias por tipo para el período; ignora el filtro de tipo.
+     * @return list<array{id: int, tipo: string, total: int, minutos: int}>
      */
-    private static function incidencias(array $filtros, Request $request): array
+    private static function cuadrePorTipo(int $dias): array
     {
-        $detalle = self::consultaDetalleIncidencias($filtros)->paginate(self::TAM_PAGINA);
-
-        $porTipo = self::consultaIncidencias($filtros['dias'])
+        return array_values(self::consultaIncidencias($dias)
             ->groupBy('ti.id_tipo', 'ti.nombre_tipo')
             ->orderByDesc('total')
             ->get([
@@ -293,7 +293,18 @@ class ReporteController extends Controller
                 'total' => (int) $t->total,
                 'minutos' => (int) $t->minutos,
             ])
-            ->all();
+            ->all());
+    }
+
+    /** Detalle paginado de incidencias y su cuadre por tipo para el mismo período.
+     * @param  Filtros  $filtros
+     * @return array{data: list<array<string, mixed>>, pagina: int, ultima: int, total: int, por_tipo: list<array{id: int, tipo: string, total: int, minutos: int}>}
+     */
+    private static function incidencias(array $filtros, Request $request): array
+    {
+        $detalle = self::consultaDetalleIncidencias($filtros)->paginate(self::TAM_PAGINA);
+
+        $porTipo = self::cuadrePorTipo($filtros['dias']);
 
         return [
             'data' => array_values($detalle->through(fn ($i): array => [
@@ -310,73 +321,134 @@ class ReporteController extends Controller
             'pagina' => $detalle->currentPage(),
             'ultima' => $detalle->lastPage(),
             'total' => $detalle->total(),
-            'por_tipo' => array_values($porTipo),
+            'por_tipo' => $porTipo,
         ];
     }
 
-    /** CSV con las tres secciones del reporte bajo los filtros vigentes. */
+    /** CSV del reporte; con `tab`, exporta únicamente esa sección. */
     public function exportar(Request $request): StreamedResponse
     {
         $filtros = self::filtros($request);
+        $secciones = match ($filtros['tab']) {
+            'envios' => ['envios'],
+            'despachos' => ['despachos'],
+            'incidencias' => ['incidencias'],
+            default => ['envios', 'despachos', 'incidencias'],
+        };
 
-        $envios = self::consultaEnviosPorVencer($filtros)->get();
-        $despachos = self::despachosPorPlazo($filtros);
-        $incidencias = self::consultaDetalleIncidencias($filtros)->get();
+        $envios = in_array('envios', $secciones, true)
+            ? self::consultaEnviosPorVencer($filtros)->get()
+            : collect();
+        $despachos = in_array('despachos', $secciones, true)
+            ? self::despachosPorPlazo($filtros)
+            : [];
+        $incidencias = in_array('incidencias', $secciones, true)
+            ? self::consultaDetalleIncidencias($filtros)->get()
+            : collect();
 
         // Evita que Excel interprete como fórmula un texto que empieza con = + - @
         $seguro = fn ($v) => is_string($v) && $v !== '' && str_contains('=+-@', $v[0]) ? "'".$v : $v;
 
-        return response()->streamDownload(function () use ($envios, $despachos, $incidencias, $seguro): void {
+        return response()->streamDownload(function () use ($envios, $despachos, $incidencias, $seguro, $secciones): void {
             $salida = fopen('php://output', 'w');
             if ($salida === false) {
                 return;
             }
             fwrite($salida, "\xEF\xBB\xBF"); // BOM para que Excel lea bien los acentos
 
-            fputcsv($salida, ['ENVÍOS POR VENCER']);
-            fputcsv($salida, ['Guía', 'Destino', 'Estado', 'Prioridad', 'Compromiso', 'Situación']);
-            foreach ($envios as $e) {
-                fputcsv($salida, [
-                    $e->codigo_guia,
-                    $e->destino,
-                    $e->estado,
-                    $e->prioridad,
-                    self::iso($e->fecha_comprometida),
-                    $e->plazo,
-                ]);
+            if (in_array('envios', $secciones, true)) {
+                fputcsv($salida, ['ENVÍOS POR VENCER']);
+                fputcsv($salida, ['Guía', 'Destino', 'Estado', 'Prioridad', 'Compromiso', 'Situación']);
+                foreach ($envios as $e) {
+                    fputcsv($salida, [
+                        $e->codigo_guia,
+                        $e->destino,
+                        $e->estado,
+                        $e->prioridad,
+                        self::iso($e->fecha_comprometida),
+                        $e->plazo,
+                    ]);
+                }
+                fputcsv($salida, []);
             }
-            fputcsv($salida, []);
 
-            fputcsv($salida, ['DESPACHOS POR PLAZO (SIN CERRAR)']);
-            fputcsv($salida, ['Despacho', 'Fecha', 'Sucursal', 'Estado', 'Paradas', 'Vencidas', 'Por vencer', 'En plazo']);
-            foreach ($despachos as $d) {
-                fputcsv($salida, [
-                    $d['codigo'],
-                    $d['fecha'],
-                    $d['sucursal'],
-                    $d['estado'],
-                    $d['total'],
-                    $d['vencidos'],
-                    $d['vence_pronto'],
-                    $d['en_plazo'],
-                ]);
+            if (in_array('despachos', $secciones, true)) {
+                fputcsv($salida, ['DESPACHOS POR PLAZO (SIN CERRAR)']);
+                fputcsv($salida, ['Despacho', 'Fecha', 'Sucursal', 'Estado', 'Paradas', 'Vencidas', 'Por vencer', 'En plazo']);
+                foreach ($despachos as $d) {
+                    fputcsv($salida, [
+                        $d['codigo'],
+                        $d['fecha'],
+                        $d['sucursal'],
+                        $d['estado'],
+                        $d['total'],
+                        $d['vencidos'],
+                        $d['vence_pronto'],
+                        $d['en_plazo'],
+                    ]);
+                }
+                fputcsv($salida, []);
             }
-            fputcsv($salida, []);
 
-            fputcsv($salida, ['INCIDENCIAS']);
-            fputcsv($salida, ['Tipo', 'Despacho', 'Envío', 'Retraso (min)', 'Fecha', 'Descripción']);
-            foreach ($incidencias as $i) {
-                fputcsv($salida, [
-                    $seguro(strtolower(str_replace('_', ' ', (string) $i->tipo))),
-                    self::codigoDespacho($i->despacho_id),
-                    $i->guia ?? '',
-                    (int) $i->minutos_retraso,
-                    self::iso($i->ocurrio_en),
-                    $seguro($i->descripcion ?? ''),
-                ]);
+            if (in_array('incidencias', $secciones, true)) {
+                fputcsv($salida, ['INCIDENCIAS']);
+                fputcsv($salida, ['Tipo', 'Despacho', 'Envío', 'Retraso (min)', 'Fecha', 'Descripción']);
+                foreach ($incidencias as $i) {
+                    fputcsv($salida, [
+                        $seguro(strtolower(str_replace('_', ' ', (string) $i->tipo))),
+                        self::codigoDespacho($i->despacho_id),
+                        $i->guia ?? '',
+                        (int) $i->minutos_retraso,
+                        self::iso($i->ocurrio_en),
+                        $seguro($i->descripcion ?? ''),
+                    ]);
+                }
             }
 
             fclose($salida);
-        }, 'reportes-'.now()->format('Ymd-His').'.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
+        }, 'reportes-'.($filtros['tab'] !== null ? $filtros['tab'].'-' : '').now()->format('Ymd-His').'.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    /** PDF horizontal del reporte; con `tab`, incluye únicamente esa sección. */
+    public function exportarPdf(Request $request): \Illuminate\Http\Response
+    {
+        $filtros = self::filtros($request);
+        $secciones = match ($filtros['tab']) {
+            'envios' => ['envios'],
+            'despachos' => ['despachos'],
+            'incidencias' => ['incidencias'],
+            default => ['envios', 'despachos', 'incidencias'],
+        };
+
+        $pdf = Pdf::loadView('reportes.pdf', [
+            'secciones' => $secciones,
+            'generado' => now(),
+            'etiquetaPlazo' => match ($filtros['plazo']) {
+                'vencido' => 'Vencidos',
+                'vence_pronto' => 'Vencen pronto',
+                'en_plazo' => 'En plazo',
+                default => 'Todos',
+            },
+            'etiquetaTipo' => $filtros['tipo'] !== null
+                ? strtolower(str_replace('_', ' ', (string) TipoIncidencia::query()->whereKey($filtros['tipo'])->value('nombre_tipo')))
+                : 'Todos',
+            'etiquetaDias' => match ($filtros['dias']) {
+                7 => 'Últimos 7 días',
+                30 => 'Últimos 30 días',
+                default => 'Todo el historial',
+            },
+            'envios' => in_array('envios', $secciones, true)
+                ? self::consultaEnviosPorVencer($filtros)->get()
+                : collect(),
+            'despachos' => in_array('despachos', $secciones, true)
+                ? self::despachosPorPlazo($filtros)
+                : [],
+            'incidencias' => in_array('incidencias', $secciones, true)
+                ? self::consultaDetalleIncidencias($filtros)->get()
+                : collect(),
+            'porTipo' => self::cuadrePorTipo($filtros['dias']),
+        ])->setPaper('a4', 'landscape');
+
+        return $pdf->download('reportes-'.($filtros['tab'] !== null ? $filtros['tab'].'-' : '').now()->format('Ymd-His').'.pdf');
     }
 }

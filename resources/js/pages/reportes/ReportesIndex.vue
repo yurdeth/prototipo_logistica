@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 import { Head, router } from '@inertiajs/vue3';
 import { colors } from '@/UI/Colors';
 import { dashboard } from '@/routes';
@@ -76,7 +76,6 @@ interface TipoResumen {
 }
 
 const props = defineProps<{
-    filtros: { plazo: Plazo | null; tipo: number | null; dias: number };
     kpis: {
         vencidos: number;
         vence_pronto: number;
@@ -100,24 +99,47 @@ defineOptions({
 });
 
 /* ───────── Consulta al servidor ───────── */
-// Solo se reenvían los filtros con valor; Inertia recarga únicamente los
-// datos del reporte sin re-renderizar todo.
-const parametros = (): Record<string, string | number> => {
+/* Cada pestaña tiene sus propios filtros: el plazo de envíos no se arrastra
+   a despachos ni incidencias, y tipo y período son exclusivos de incidencias.
+   Cada consulta recarga solo los datos de su pestaña. */
+type TabReporte = 'envios' | 'despachos' | 'incidencias';
+
+const filtros = reactive({
+    plazoEnvios: null as Plazo | null,
+    plazoDespachos: null as Plazo | null,
+    tipo: null as number | null,
+    dias: 0,
+});
+
+const parametros = (tab: TabReporte): Record<string, string | number> => {
     const params: Record<string, string | number> = {};
 
-    if (props.filtros.plazo) params.plazo = props.filtros.plazo;
-    if (props.filtros.tipo) params.tipo = props.filtros.tipo;
-    if (props.filtros.dias > 0) params.dias = props.filtros.dias;
+    if (tab === 'envios' && filtros.plazoEnvios) {
+        params.plazo = filtros.plazoEnvios;
+    }
+    if (tab === 'despachos' && filtros.plazoDespachos) {
+        params.plazo = filtros.plazoDespachos;
+    }
+    if (tab === 'incidencias') {
+        if (filtros.tipo) params.tipo = filtros.tipo;
+        if (filtros.dias > 0) params.dias = filtros.dias;
+    }
 
     return params;
 };
 
+const soloPorTab: Record<TabReporte, string[]> = {
+    envios: ['kpis', 'envios'],
+    despachos: ['kpis', 'despachos'],
+    incidencias: ['kpis', 'incidencias'],
+};
+
 const consultar = (pagina = 1) => {
-    const params = parametros();
+    const params = parametros(tab.value);
     if (pagina > 1) params.page = pagina;
 
     router.get('/reportes', params, {
-        only: ['filtros', 'kpis', 'envios', 'despachos', 'incidencias'],
+        only: soloPorTab[tab.value],
         preserveState: true,
         preserveScroll: true,
         replace: true,
@@ -125,12 +147,30 @@ const consultar = (pagina = 1) => {
 };
 
 // Descarga un CSV con las tres secciones del reporte bajo los filtros vigentes.
+// Exporta únicamente la sección de la pestaña activa, con sus filtros.
 const exportar = () => {
+    const params = { ...parametros(tab.value), tab: tab.value };
     const qs = new URLSearchParams(
-        Object.entries(parametros()).map(([k, v]) => [k, String(v)]),
+        Object.entries(params).map(([k, v]) => [k, String(v)]),
     ).toString();
 
     window.location.href = `/reportes/exportar${qs ? `?${qs}` : ''}`;
+};
+
+// Descarga el reporte en PDF horizontal, con los filtros aplicados en pantalla.
+// Genera el PDF de la sección de la pestaña activa, con sus filtros.
+const etiquetaTab = computed(
+    () =>
+        tabs.find((t) => t.key === tab.value)?.label.toLowerCase() ?? tab.value,
+);
+
+const exportarPdf = () => {
+    const params = { ...parametros(tab.value), tab: tab.value };
+    const qs = new URLSearchParams(
+        Object.entries(params).map(([k, v]) => [k, String(v)]),
+    ).toString();
+
+    window.location.href = `/reportes/pdf${qs ? `?${qs}` : ''}`;
 };
 
 const plazoInfo: Record<Plazo, { label: string; color: string }> = {
@@ -160,8 +200,8 @@ const chips = computed<Chip[]>(() => [
     },
 ]);
 
-const alPlazo = (k: string) => {
-    props.filtros.plazo = props.filtros.plazo === k ? null : (k as Plazo);
+const alPlazo = (clave: 'plazoEnvios' | 'plazoDespachos', k: string) => {
+    filtros[clave] = filtros[clave] === k ? null : (k as Plazo);
     consultar();
 };
 
@@ -172,12 +212,12 @@ const alTipo = (origen: string | Event) => {
             ? Number(origen)
             : Number((origen.target as HTMLSelectElement).value);
 
-    props.filtros.tipo = props.filtros.tipo === id ? null : id;
+    filtros.tipo = filtros.tipo === id ? null : id;
     consultar();
 };
 
 const alDias = (e: Event) => {
-    props.filtros.dias = Number((e.target as HTMLSelectElement).value);
+    filtros.dias = Number((e.target as HTMLSelectElement).value);
     consultar();
 };
 
@@ -211,7 +251,7 @@ const tarjetas = computed<Stat[]>(() => [
 ]);
 
 /* ───────── Pestañas y tablas ───────── */
-const tab = ref('envios');
+const tab = ref<TabReporte>('envios');
 const tabs = [
     { key: 'envios', label: 'Envíos por vencer' },
     { key: 'despachos', label: 'Despachos por plazo' },
@@ -283,7 +323,17 @@ const filasPorTipo = computed<BarRow[]>(() =>
             subtitle="Envíos por vencer, despachos según su compromiso e incidencias"
             accion="Exportar"
             @exportar="exportar"
-        />
+        >
+            <template #acciones>
+                <button
+                    type="button"
+                    class="inline-flex h-10 items-center gap-2 rounded-lg bg-blue-700 px-4 text-sm font-medium text-white transition hover:bg-blue-800"
+                    @click="exportarPdf"
+                >
+                    PDF de {{ etiquetaTab }}
+                </button>
+            </template>
+        </BiHeader>
 
         <StatCards :items="tarjetas" :cols="4" />
 
@@ -326,9 +376,9 @@ const filasPorTipo = computed<BarRow[]>(() =>
             <div v-if="tab === 'envios'" class="pt-5">
                 <BiChips
                     :items="chips"
-                    :active="filtros.plazo"
+                    :active="filtros.plazoEnvios"
                     label="Filtrar por situación de plazo"
-                    @toggle="alPlazo"
+                    @toggle="(k) => alPlazo('plazoEnvios', k)"
                 />
 
                 <div class="pt-4">
@@ -398,9 +448,9 @@ const filasPorTipo = computed<BarRow[]>(() =>
             <div v-else-if="tab === 'despachos'" class="pt-5">
                 <BiChips
                     :items="chips"
-                    :active="filtros.plazo"
+                    :active="filtros.plazoDespachos"
                     label="Filtrar despachos por situación"
-                    @toggle="alPlazo"
+                    @toggle="(k) => alPlazo('plazoDespachos', k)"
                 />
 
                 <div class="pt-4">

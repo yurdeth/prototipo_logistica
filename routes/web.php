@@ -61,6 +61,7 @@ Route::middleware(['auth'])->group(function () {
     Route::prefix('reportes')->name('reportes.')->group(function () {
         Route::get('/', [ReporteController::class, 'index'])->name('index');
         Route::get('exportar', [ReporteController::class, 'exportar'])->name('exportar');
+        Route::get('pdf', [ReporteController::class, 'exportarPdf'])->name('pdf');
     });
 
     // Flota: vistas y operaciones (sin API; todo por Inertia)
