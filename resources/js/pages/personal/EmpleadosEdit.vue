@@ -130,6 +130,10 @@ const checklist = computed(() => [
     },
     { label: 'Puesto', ok: form.puesto_id !== null },
     { label: 'Sucursal', ok: form.sucursal_id !== null },
+    {
+        label: 'Número de licencia',
+        ok: form.numero_licencia.trim().length > 0,
+    },
 ]);
 
 const { completados, total, completo } = useChecklist(checklist);
@@ -360,7 +364,7 @@ const cambiarEstadoEmpleado = (accion: 'desactivar' | 'reactivar') => {
                             label="Número de licencia"
                             maxlength="30"
                             placeholder="LIC-001"
-                            optional
+                            required
                             :error="form.errors.numero_licencia"
                         >
                             <template #hint>

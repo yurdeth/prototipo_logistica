@@ -99,16 +99,20 @@ class EmpleadoTest extends TestCase
         expect(Empleado::count())->toBe(1);
     }
 
-    /** Varios empleados sin licencia conviven: el unique solo aplica al valor presente. */
-    public function test_permite_varios_empleados_sin_licencia(): void
+    /** La licencia es obligatoria: en blanco o solo espacios no se registra el empleado. */
+    public function test_rechaza_licencia_vacia_o_en_blanco(): void
     {
-        Empleado::create([...$this->datosBase, 'numero_licencia' => null]);
-
         $this->actingAs($this->usuario)
             ->post('/empleados', [...$this->datosBase, 'documento_identidad' => '7654321', 'numero_licencia' => null])
-            ->assertRedirect('/empleados');
+            ->assertSessionHasErrors('numero_licencia');
 
-        expect(Empleado::count())->toBe(2);
+        expect(Empleado::count())->toBe(0);
+
+        $this->actingAs($this->usuario)
+            ->post('/empleados', [...$this->datosBase, 'documento_identidad' => '7654321', 'numero_licencia' => '   '])
+            ->assertSessionHasErrors('numero_licencia');
+
+        expect(Empleado::count())->toBe(0);
     }
 
     public function test_valida_campos_obligatorios_y_existencias(): void

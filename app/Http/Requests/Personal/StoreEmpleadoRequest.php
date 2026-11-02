@@ -20,6 +20,14 @@ class StoreEmpleadoRequest extends FormRequest
      *
      * @return array<string, ValidationRule|array<mixed>|string>
      */
+    /** Recorta espacios: una licencia en blanco o solo espacios queda vacía y falla como obligatoria. */
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'numero_licencia' => trim((string) $this->input('numero_licencia')),
+        ]);
+    }
+
     public function rules(): array
     {
         return [
@@ -44,9 +52,9 @@ class StoreEmpleadoRequest extends FormRequest
                 Rule::unique(Empleado::class, 'documento_identidad'),
             ],
             'telefono' => ['nullable', 'string', 'max:20'],
-            // La licencia identifica al conductor: presente, nunca repetida
+            // La licencia identifica al conductor: obligatoria y nunca repetida
             'numero_licencia' => [
-                'nullable',
+                'required',
                 'string',
                 'max:30',
                 Rule::unique(Empleado::class, 'numero_licencia'),
@@ -80,6 +88,7 @@ class StoreEmpleadoRequest extends FormRequest
             'documento_identidad.max' => 'El documento de identidad no puede superar 20 caracteres.',
             'documento_identidad.unique' => 'Ya existe un empleado registrado con ese documento de identidad.',
             'telefono.max' => 'El teléfono no puede superar 20 caracteres.',
+            'numero_licencia.required' => 'El número de licencia es obligatorio.',
             'numero_licencia.unique' => 'Ya existe un empleado registrado con ese número de licencia.',
             'numero_licencia.max' => 'El número de licencia no puede superar 30 caracteres.',
             'fecha_contratacion.date' => 'La fecha de contratación no es válida.',

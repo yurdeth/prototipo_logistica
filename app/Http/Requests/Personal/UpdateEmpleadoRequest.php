@@ -28,7 +28,7 @@ class UpdateEmpleadoRequest extends StoreEmpleadoRequest
             Rule::unique(Empleado::class, 'documento_identidad')->ignore($idActual),
         ];
         $reglas['numero_licencia'] = [
-            'nullable',
+            'required',
             'string',
             'max:30',
             Rule::unique(Empleado::class, 'numero_licencia')->ignore($idActual),
