@@ -37,6 +37,7 @@ const filtros = reactive({
     estado: '',
     ruta: '',
     territorio: '',
+    q: '',
 });
 const datos = ref<DatosMapa | null>(null);
 const error = ref<string | null>(null);
@@ -45,6 +46,10 @@ const filtrosAbiertos = ref(false);
 const indiceParadaActual = ref(0);
 const mostrarConexiones = ref(false);
 const mapaRef = ref<InstanceType<typeof MapaRutas> | null>(null);
+
+/* Buscador server-side: el debounce evita consultar en cada tecla. */
+const busqueda = ref('');
+let temporizadorBusqueda: ReturnType<typeof setTimeout> | undefined;
 
 type PanelId = 'recorridos' | 'territorios' | 'estados';
 const panelActivo = ref<PanelId>('recorridos');
@@ -56,7 +61,7 @@ const panelesAnalisis: { id: PanelId; etiqueta: string }[] = [
 let solicitud: AbortController | null = null;
 
 /* ───────── Carga de datos ───────── */
-const cargarDatos = async (): Promise<void> => {
+const cargarDatos = async (pagina = 1): Promise<void> => {
     solicitud?.abort();
     const actual = new AbortController();
     solicitud = actual;
@@ -68,6 +73,9 @@ const cargarDatos = async (): Promise<void> => {
         if (valor !== '') {
             parametros.set(clave, valor);
         }
+    }
+    if (pagina > 1) {
+        parametros.set('page', String(pagina));
     }
 
     try {
@@ -85,7 +93,21 @@ const cargarDatos = async (): Promise<void> => {
             );
         }
 
-        datos.value = (await respuesta.json()) as DatosMapa;
+        const cuerpo = (await respuesta.json()) as DatosMapa;
+
+        // Páginas siguientes del panel de recorridos: solo se anexan rutas;
+        // el resto (kpis, envíos, territorios) ya está en pantalla.
+        if (pagina > 1 && datos.value) {
+            datos.value = {
+                ...datos.value,
+                rutas: {
+                    data: [...datos.value.rutas.data, ...cuerpo.rutas.data],
+                    hay_mas: cuerpo.rutas.hay_mas,
+                },
+            };
+        } else {
+            datos.value = cuerpo;
+        }
     } catch (err) {
         if (actual.signal.aborted) {
             return;
@@ -106,12 +128,31 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+    clearTimeout(temporizadorBusqueda);
     solicitud?.abort();
 });
 
 watch(filtros, () => {
     void cargarDatos();
 });
+
+watch(busqueda, (valor) => {
+    clearTimeout(temporizadorBusqueda);
+    temporizadorBusqueda = setTimeout(() => {
+        filtros.q = valor.trim();
+    }, 300);
+});
+
+/* Pide la página siguiente de recorridos cuando el panel se acerca al final */
+const alScrollRecorridos = (e: Event): void => {
+    const el = e.target as HTMLElement;
+
+    if (!datos.value?.rutas.hay_mas || cargando.value) return;
+
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 60) {
+        void cargarDatos(Math.ceil(datos.value.rutas.data.length / 10) + 1);
+    }
+};
 
 watch(
     () => filtros.ruta,
@@ -129,8 +170,9 @@ const territoriosDisponibles = computed(
 );
 const rutaSeleccionada = computed(
     () =>
-        datos.value?.rutas.find((ruta) => String(ruta.id) === filtros.ruta) ??
-        null,
+        datos.value?.rutas.data.find(
+            (ruta) => String(ruta.id) === filtros.ruta,
+        ) ?? null,
 );
 const paradasRuta = computed(() => rutaSeleccionada.value?.paradas ?? []);
 const paradaActual = computed(
@@ -301,7 +343,7 @@ const moverPestana = (evento: KeyboardEvent, indice: number): void => {
 
 const conteoPestana = (id: PanelId): number | null => {
     if (!datos.value) return null;
-    if (id === 'recorridos') return datos.value.rutas.length;
+    if (id === 'recorridos') return datos.value.rutas.data.length;
     if (id === 'territorios') return datos.value.territorios.length;
     return null;
 };
@@ -334,7 +376,7 @@ const recentrarMapa = (): void => {
                 type="button"
                 class="inline-flex min-h-10 items-center gap-2 rounded-lg border border-sidebar-border/70 bg-background px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60"
                 :disabled="cargando"
-                @click="cargarDatos"
+                @click="cargarDatos()"
             >
                 <svg
                     class="h-4 w-4"
@@ -364,6 +406,29 @@ const recentrarMapa = (): void => {
             aria-label="Filtros del análisis geográfico"
         >
             <div class="flex flex-wrap items-center gap-3 p-3">
+                <div class="relative min-w-0 flex-1 basis-56">
+                    <svg
+                        class="absolute top-2.5 left-3 h-4 w-4 text-muted-foreground"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                    >
+                        <circle cx="11" cy="11" r="8" />
+                        <path d="m21 21-4.3-4.3" />
+                    </svg>
+                    <input
+                        v-model="busqueda"
+                        type="search"
+                        placeholder="Buscar por guía, despacho o sucursal…"
+                        aria-label="Buscar envíos y despachos"
+                        class="h-9 w-full rounded-lg border border-sidebar-border/70 bg-background pr-3 pl-9 text-sm text-foreground transition outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                    />
+                </div>
+
                 <div
                     class="max-w-full overflow-x-auto"
                     role="group"
@@ -523,7 +588,7 @@ const recentrarMapa = (): void => {
             <button
                 type="button"
                 class="min-h-9 rounded-lg border border-current px-3 font-medium transition-colors hover:bg-red-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none dark:hover:bg-red-950"
-                @click="cargarDatos"
+                @click="cargarDatos()"
             >
                 Reintentar
             </button>
@@ -660,7 +725,7 @@ const recentrarMapa = (): void => {
                         <MapaRutas
                             ref="mapaRef"
                             :sucursales="datos.sucursales"
-                            :despachos="datos.rutas"
+                            :despachos="datos.rutas.data"
                             :envios="datos.envios"
                             :seleccionado="
                                 filtros.ruta ? Number(filtros.ruta) : null
@@ -858,7 +923,7 @@ const recentrarMapa = (): void => {
 
                     <!-- Sugerencia cuando todavía no hay ruta elegida -->
                     <p
-                        v-else-if="datos?.rutas.length"
+                        v-else-if="datos?.rutas.data.length"
                         class="pointer-events-none absolute bottom-7 left-1/2 z-[1000] w-max max-w-[calc(100%-1.5rem)] -translate-x-1/2 rounded-full border border-sidebar-border/70 bg-card/95 px-4 py-2 text-center text-xs text-muted-foreground shadow-md"
                     >
                         Elige una ruta para recorrer sus paradas una a una.
@@ -925,13 +990,14 @@ const recentrarMapa = (): void => {
                     aria-labelledby="tab-recorridos"
                     :hidden="panelActivo !== 'recorridos'"
                     class="min-h-0 flex-1 space-y-3 overflow-y-auto p-3"
+                    @scroll="alScrollRecorridos"
                 >
                     <p class="text-xs text-muted-foreground">
                         Selecciona un despacho para verlo en el mapa y recorrer
                         sus paradas.
                     </p>
-                    <ul v-if="datos?.rutas.length" class="space-y-2">
-                        <li v-for="ruta in datos.rutas" :key="ruta.id">
+                    <ul v-if="datos?.rutas.data.length" class="space-y-2">
+                        <li v-for="ruta in datos.rutas.data" :key="ruta.id">
                             <button
                                 type="button"
                                 class="w-full rounded-lg border p-3 text-left transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
@@ -1059,6 +1125,23 @@ const recentrarMapa = (): void => {
                         class="py-8 text-center text-sm text-muted-foreground"
                     >
                         No hay recorridos con los filtros seleccionados.
+                    </p>
+                    <p
+                        v-if="cargando && datos?.rutas.data.length"
+                        class="py-2 text-center text-xs text-muted-foreground"
+                        role="status"
+                    >
+                        Cargando más recorridos…
+                    </p>
+                    <p
+                        v-else-if="
+                            datos &&
+                            !datos.rutas.hay_mas &&
+                            datos.rutas.data.length
+                        "
+                        class="py-2 text-center text-xs text-muted-foreground"
+                    >
+                        No hay más recorridos
                     </p>
                 </div>
 

@@ -197,11 +197,11 @@ class DespachoTest extends TestCase
         $this->actingAs($this->operador)
             ->getJson("/rutas/mapa/datos?dias=0&estado=ENTREGADO&ruta={$despacho->id_despacho}")
             ->assertOk()
-            ->assertJsonCount(2, 'rutas.0.paradas')
-            ->assertJsonPath('rutas.0.paradas.0.envio_id', $envios[0]->id_envio)
-            ->assertJsonPath('rutas.0.paradas.1.envio_id', $envios[1]->id_envio)
-            ->assertJsonPath('rutas.0.paradas.0.estado_envio', 'EN_CENTRO')
-            ->assertJsonPath('rutas.0.paradas.1.estado_envio', 'ENTREGADO');
+            ->assertJsonCount(2, 'rutas.data.0.paradas')
+            ->assertJsonPath('rutas.data.0.paradas.0.envio_id', $envios[0]->id_envio)
+            ->assertJsonPath('rutas.data.0.paradas.1.envio_id', $envios[1]->id_envio)
+            ->assertJsonPath('rutas.data.0.paradas.0.estado_envio', 'EN_CENTRO')
+            ->assertJsonPath('rutas.data.0.paradas.1.estado_envio', 'ENTREGADO');
     }
 
     public function test_el_seguimiento_usa_ubicaciones_de_sucursales_si_no_hay_ubicacion_reportada(): void
@@ -252,22 +252,22 @@ class DespachoTest extends TestCase
         $respuesta = $this->actingAs($this->operador)
             ->getJson("/rutas/mapa/datos?dias=0&ruta={$despacho->id_despacho}")
             ->assertOk()
-            ->assertJsonPath('rutas.0.paradas.0.ubicacion_aproximada', true)
-            ->assertJsonPath('rutas.0.paradas.1.ubicacion_aproximada', true);
+            ->assertJsonPath('rutas.data.0.paradas.0.ubicacion_aproximada', true)
+            ->assertJsonPath('rutas.data.0.paradas.1.ubicacion_aproximada', true);
 
-        $this->assertNotNull(data_get($respuesta->json(), 'rutas.0.paradas.0.lat'));
-        $this->assertNotNull(data_get($respuesta->json(), 'rutas.0.paradas.0.lng'));
-        $this->assertNotNull(data_get($respuesta->json(), 'rutas.0.paradas.1.lat'));
-        $this->assertNotNull(data_get($respuesta->json(), 'rutas.0.paradas.1.lng'));
+        $this->assertNotNull(data_get($respuesta->json(), 'rutas.data.0.paradas.0.lat'));
+        $this->assertNotNull(data_get($respuesta->json(), 'rutas.data.0.paradas.0.lng'));
+        $this->assertNotNull(data_get($respuesta->json(), 'rutas.data.0.paradas.1.lat'));
+        $this->assertNotNull(data_get($respuesta->json(), 'rutas.data.0.paradas.1.lng'));
         foreach ($coordenadasEsperadas as $indice => $coordenadas) {
             $this->assertNotNull($coordenadas);
             $this->assertEquals(
                 (float) $coordenadas->lat,
-                data_get($respuesta->json(), "rutas.0.paradas.{$indice}.lat"),
+                data_get($respuesta->json(), "rutas.data.0.paradas.{$indice}.lat"),
             );
             $this->assertEquals(
                 (float) $coordenadas->lng,
-                data_get($respuesta->json(), "rutas.0.paradas.{$indice}.lng"),
+                data_get($respuesta->json(), "rutas.data.0.paradas.{$indice}.lng"),
             );
         }
     }
@@ -285,6 +285,66 @@ class DespachoTest extends TestCase
         $this->actingAs($this->operador)
             ->post('/rutas', $this->payload(['paradas' => [$parada(1)]]))
             ->assertSessionHasErrors('paradas');
+    }
+
+    /** La ventana del mapa rige por la fecha del despacho: una ruta de hoy no desaparece porque sus envíos se registraron hace semanas. */
+    public function test_el_mapa_muestra_el_despacho_por_su_fecha_y_no_por_el_registro_del_envio(): void
+    {
+        // Envío "viejo": registrado fuera de la ventana de 7 días
+        $envioViejo = $this->envioDeLaSucursal();
+        DB::table('envios.envios')
+            ->where('id_envio', $envioViejo->id_envio)
+            ->update(['fecha_registro' => now()->subDays(10)->setTimezone('America/El_Salvador')]);
+
+        $this->actingAs($this->operador)
+            ->post('/rutas', $this->payload(['paradas' => [
+                ['envio_id' => $envioViejo->id_envio, 'orden' => 1, 'hora_estimada' => null],
+            ]]))
+            ->assertRedirect(route('rutas.index'));
+
+        $despachoId = Despacho::query()->sole()->id_despacho;
+
+        $this->actingAs($this->operador)
+            ->getJson('/rutas/mapa/datos?dias=7')
+            ->assertOk()
+            ->assertJsonCount(1, 'rutas.data')
+            ->assertJsonPath('rutas.data.0.id', $despachoId)
+            ->assertJsonPath('catalogos.rutas.0.id', $despachoId);
+    }
+
+    public function test_las_rutas_del_mapa_se_paginan(): void
+    {
+        foreach (['PLANIFICADO', 'EN_CURSO', 'COMPLETADO'] as $estado) {
+            DB::table('rutas.estados_despachos')->insertOrIgnore(['nombre_estado' => $estado]);
+        }
+        $estadoPlanificado = DB::table('rutas.estados_despachos')->where('nombre_estado', 'PLANIFICADO')->value('id_estado');
+
+        for ($i = 0; $i < 11; $i++) {
+            $despachoId = (int) DB::table('rutas.despachos')->insertGetId([
+                'sucursal_origen_id' => $this->sucursal->id_sucursal,
+                'conductor_empleado_id' => $this->conductor->id_empleado,
+                'vehiculo_id' => $this->vehiculoId,
+                'fecha' => now()->toDateString(),
+                'estado_despacho_id' => $estadoPlanificado,
+            ], 'id_despacho');
+            DB::table('rutas.despacho_paradas')->insert([
+                'despacho_id' => $despachoId,
+                'envio_id' => $this->envioDeLaSucursal()->id_envio,
+                'orden' => 1,
+            ]);
+        }
+
+        $this->actingAs($this->operador)
+            ->getJson('/rutas/mapa/datos?dias=7')
+            ->assertOk()
+            ->assertJsonCount(10, 'rutas.data')
+            ->assertJsonPath('rutas.hay_mas', true);
+
+        $this->actingAs($this->operador)
+            ->getJson('/rutas/mapa/datos?dias=7&page=2')
+            ->assertOk()
+            ->assertJsonCount(1, 'rutas.data')
+            ->assertJsonPath('rutas.hay_mas', false);
     }
 
     public function test_rechaza_doble_reserva_de_vehiculo_el_mismo_dia(): void

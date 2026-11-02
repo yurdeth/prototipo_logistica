@@ -114,7 +114,8 @@ export interface DatosMapa {
         }[];
     };
     envios: EnvioMapa[];
-    rutas: DespachoMapa[];
+    /** Panel de recorridos paginado en el servidor (scroll infinito). */
+    rutas: { data: DespachoMapa[]; hay_mas: boolean };
     sucursales: SucursalMapa[];
 }
 

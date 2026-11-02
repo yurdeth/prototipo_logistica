@@ -21,6 +21,9 @@ use Inertia\Response;
  */
 class RutaMapaController extends Controller
 {
+    /** Tamaño de página del panel de recorridos (scroll infinito). */
+    private const TAM_PAGINA_RUTAS = 10;
+
     private const ESTADOS_ENVIO = [
         'REGISTRADO',
         'RECOLECTADO',
@@ -48,16 +51,21 @@ class RutaMapaController extends Controller
             'estado' => ['nullable', 'in:'.implode(',', self::ESTADOS_ENVIO)],
             'ruta' => ['nullable', 'integer', 'min:1'],
             'territorio' => ['nullable', 'integer', 'min:1'],
+            'q' => ['nullable', 'string', 'max:100'],
+            'page' => ['nullable', 'integer', 'min:1'],
         ]);
         $filtros = [
             'dias' => (int) ($validos['dias'] ?? 7),
             'estado' => $validos['estado'] ?? null,
             'ruta' => isset($validos['ruta']) ? (int) $validos['ruta'] : null,
             'territorio' => isset($validos['territorio']) ? (int) $validos['territorio'] : null,
+            'q' => trim($validos['q'] ?? ''),
         ];
         $filtros['territorio_ids'] = $filtros['territorio'] !== null
             ? $this->territoriosDescendientes($filtros['territorio'])
             : null;
+
+        $pagina = max(1, (int) ($validos['page'] ?? 1));
 
         $desde = $filtros['dias'] > 0
             ? now()->startOfDay()->subDays($filtros['dias'] - 1)
@@ -191,7 +199,13 @@ class RutaMapaController extends Controller
             $idsRuta[] = $filtros['ruta'];
             $idsRuta = array_values(array_unique($idsRuta));
         }
-        $rutas = $this->rutas($idsRuta);
+
+        // Panel de recorridos paginado en el servidor: la página pide una ruta
+        // más para saber si hay página siguiente sin COUNT(*)
+        $offset = ($pagina - 1) * self::TAM_PAGINA_RUTAS;
+        $paginaRutas = array_slice($idsRuta, $offset, self::TAM_PAGINA_RUTAS + 1);
+        $hayMas = count($paginaRutas) > self::TAM_PAGINA_RUTAS;
+        $rutas = $this->rutas(array_slice($paginaRutas, 0, self::TAM_PAGINA_RUTAS));
         $idsEnvio = array_values($envios->pluck('id')->map(fn ($id) => (int) $id)->all());
         $incidencias = $this->incidenciasFiltradas($idsEnvio, $idsRuta);
 
@@ -219,7 +233,10 @@ class RutaMapaController extends Controller
                 'territorios' => $this->territorios(),
             ],
             'envios' => $envios,
-            'rutas' => $rutas,
+            'rutas' => [
+                'data' => $rutas,
+                'hay_mas' => $hayMas,
+            ],
             'sucursales' => $this->sucursales(),
         ]);
     }
@@ -319,17 +336,40 @@ class RutaMapaController extends Controller
             ->leftJoinSub($incidenciasPorEnvio, 'ie', 'ie.envio_id', '=', 'e.id_envio');
     }
 
-    /** @param array{dias: int, estado: string|null, ruta: int|null, territorio: int|null, territorio_ids: list<int>|null} $filtros */
+    /** @param array{dias: int, estado: string|null, ruta: int|null, territorio: int|null, territorio_ids: list<int>|null, q: string} $filtros */
     private function aplicarFiltros(Builder $consulta, array $filtros, ?CarbonInterface $desde): Builder
     {
         if ($desde !== null) {
-            $consulta->where('e.fecha_registro', '>=', $desde);
+            // Actividad reciente: cuenta el registro del envío o, si ya fue
+            // despachado, la fecha de su ruta; la ventana no borra despachos
+            // recientes solo porque sus envíos se registraron hace semanas.
+            $consulta->where(function (Builder $subconsulta) use ($desde): void {
+                $subconsulta->where('e.fecha_registro', '>=', $desde)
+                    ->orWhere('ruta.fecha', '>=', $desde);
+            });
         }
         if ($filtros['estado'] !== null) {
             $consulta->where('s.nombre_estado', $filtros['estado']);
         }
         if ($filtros['territorio_ids'] !== null) {
             $consulta->whereIn('t.id_territorio', $filtros['territorio_ids']);
+        }
+        if ($filtros['q'] !== '') {
+            $patron = '%'.str_replace(['\\', '%', '_'], ['\\\\', '\%', '\_'], $filtros['q']).'%';
+            $codigo = null;
+
+            if (preg_match('/^(?:DSP-)?0*(\d+)$/i', $filtros['q'], $coincidencia) === 1) {
+                $codigo = (int) $coincidencia[1];
+            }
+
+            $consulta->where(function (Builder $subconsulta) use ($patron, $codigo): void {
+                $subconsulta->where('e.codigo_guia', 'ilike', $patron)
+                    ->orWhere('ruta.sucursal', 'ilike', $patron);
+
+                if ($codigo !== null) {
+                    $subconsulta->orWhere('ruta.id_despacho', $codigo);
+                }
+            });
         }
         if ($filtros['ruta'] !== null) {
             $consulta->whereExists(fn (Builder $subconsulta) => $subconsulta
@@ -475,14 +515,9 @@ class RutaMapaController extends Controller
     {
         return DB::table('rutas.despachos as d')
             ->join('rutas.estados_despachos as ed', 'ed.id_estado', '=', 'd.estado_despacho_id')
-            ->when($desde, fn (Builder $consulta) => $consulta->whereExists(
-                fn (Builder $envios) => $envios
-                    ->selectRaw('1')
-                    ->from('rutas.despacho_paradas as p')
-                    ->join('envios.envios as e', 'e.id_envio', '=', 'p.envio_id')
-                    ->whereColumn('p.despacho_id', 'd.id_despacho')
-                    ->where('e.fecha_registro', '>=', $desde)
-            ))
+            // El selector lista rutas por su propia fecha; la antigüedad de
+            // registro de los envíos que lleva no oculta un despacho vigente.
+            ->when($desde, fn (Builder $consulta) => $consulta->where('d.fecha', '>=', $desde))
             ->orderByDesc('d.fecha')
             ->orderByDesc('d.id_despacho')
             ->get([

@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed, reactive, ref, toValue } from 'vue';
+import { computed, onBeforeUnmount, reactive, ref, toValue } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { colors } from '@/UI/Colors';
 import { dashboard } from '@/routes';
 import { MapPin } from '@/UI/Icons';
+import { useClipboard } from '@vueuse/core';
+import { Check, Copy } from '@lucide/vue';
 
 import {
     estadoDespachoInfo,
@@ -107,6 +109,20 @@ const velocidadMax = computed(() =>
 );
 
 const seleccionado = ref<Despacho | null>(null);
+
+/* ───────── Copiar código del despacho ───────── */
+const { copy } = useClipboard();
+const codigoCopiado = ref<string | null>(null);
+let copiadoTimer: ReturnType<typeof setTimeout> | undefined;
+
+const copiarCodigo = async (codigo: string) => {
+    await copy(codigo);
+    codigoCopiado.value = codigo;
+    clearTimeout(copiadoTimer);
+    copiadoTimer = setTimeout(() => (codigoCopiado.value = null), 2000);
+};
+
+onBeforeUnmount(() => clearTimeout(copiadoTimer));
 
 // ── Utilidades visuales ──
 const colorPct = (p: number) =>
@@ -468,9 +484,26 @@ const registrarIncidencia = (d: Despacho) => {
                         "
                     >
                         <p
-                            class="font-mono text-sm font-medium text-foreground"
+                            class="flex items-center gap-1 font-mono text-sm font-medium text-foreground"
                         >
                             {{ d.codigo }}
+                            <button
+                                type="button"
+                                class="rounded p-0.5 text-muted-foreground transition hover:bg-muted hover:text-foreground"
+                                :aria-label="`Copiar ${d.codigo}`"
+                                :title="
+                                    codigoCopiado === d.codigo
+                                        ? 'Copiado'
+                                        : 'Copiar código'
+                                "
+                                @click.stop="copiarCodigo(d.codigo)"
+                            >
+                                <Check
+                                    v-if="codigoCopiado === d.codigo"
+                                    class="h-3.5 w-3.5 text-green-500"
+                                />
+                                <Copy v-else class="h-3.5 w-3.5" />
+                            </button>
                         </p>
                         <p class="mt-1 text-xs text-muted-foreground">
                             {{ fmtFecha(d.fecha) }} · {{ d.sucursal_origen }}
